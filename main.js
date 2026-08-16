@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, protocol, session, shell, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, protocol, session, shell, Notification, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
@@ -378,7 +378,10 @@ function createWindow() {
     frame: false,
     show: false,
     backgroundColor: '#000000',
-    icon: path.join(__dirname, 'assets', 'icon.ico'),
+    // nativeImage.createFromPath can read from inside app.asar, unlike the
+    // plain icon path option (which silently fell back to Electron's icon
+    // on the taskbar in packaged builds).
+    icon: nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon.ico')),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

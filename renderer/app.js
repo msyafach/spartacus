@@ -489,9 +489,13 @@ const Timer = (() => {
   const MODES = { focus: 'FOCUS', short: 'BREAK', long: 'LONG BREAK' };
   const RING_C = 2 * Math.PI * 140; // 879.65
 
-  let mode = 'focus';
-  let total = settings.focus * 60;
-  let remaining = total;
+  let mode = 'focus'; // the tab being viewed
+  let activeMode = null; // the tab whose countdown is actually running
+  // Each tab keeps its own remaining time. Switching tabs never resets
+  // anything; a countdown only starts (or restarts) when START is pressed
+  // on that tab.
+  let remainingByMode = { focus: settings.focus * 60, short: settings.short * 60, long: settings.long * 60 };
+  let remaining = remainingByMode.focus;
   let running = false;
   let endAt = 0;
   let intervalId = null;
@@ -500,8 +504,10 @@ const Timer = (() => {
   const modeTotal = (m) => (m === 'focus' ? settings.focus : m === 'short' ? settings.short : settings.long) * 60;
 
   function tick() {
-    remaining = Math.max(0, Math.round((endAt - Date.now()) / 1000));
-    if (remaining <= 0) { complete(); return; }
+    const left = Math.max(0, Math.round((endAt - Date.now()) / 1000));
+    remainingByMode[activeMode] = left;
+    if (activeMode === mode) remaining = left; // live display only on the running tab
+    if (left <= 0) { complete(); return; }
     // Skip DOM work entirely while the window is hidden/minimized.
     if (!document.hidden) render();
   }
@@ -514,8 +520,10 @@ const Timer = (() => {
   }
 
   function start() {
-    if (running || remaining <= 0) return;
+    if (remaining <= 0) return;
+    // Pressing START on a tab begins (or restarts) that tab's countdown.
     running = true;
+    activeMode = mode;
     Engine.stopAlarm();
     window.spartacus.flash(false);
     endAt = Date.now() + remaining * 1000;
@@ -527,31 +535,38 @@ const Timer = (() => {
     if (!running) return;
     running = false;
     remaining = Math.max(0, Math.round((endAt - Date.now()) / 1000));
+    remainingByMode[activeMode] = remaining;
+    activeMode = null;
     clearInterval(intervalId);
     render();
   }
 
   function reset() {
-    running = false;
-    clearInterval(intervalId);
-    remaining = total;
+    if (running && activeMode === mode) {
+      running = false;
+      activeMode = null;
+      clearInterval(intervalId);
+    }
+    remainingByMode[mode] = modeTotal(mode);
+    remaining = remainingByMode[mode];
     render();
   }
 
   function setMode(m) {
-    running = false;
-    clearInterval(intervalId);
+    if (m === mode) return;
+    remainingByMode[mode] = remaining; // remember this tab's position
     mode = m;
-    total = modeTotal(m);
-    remaining = total;
+    remaining = remainingByMode[m];
     render();
   }
 
   function complete() {
     clearInterval(intervalId);
     running = false;
-    remaining = 0;
-    if (mode === 'focus') {
+    const finished = activeMode;
+    activeMode = null;
+    remainingByMode[finished] = modeTotal(finished); // fresh for next time
+    if (finished === 'focus') {
       completed += 1;
       saveJSON('spartacus.completed', completed);
       const long = completed % settings.sessions === 0;
@@ -562,43 +577,60 @@ const Timer = (() => {
       }
       window.spartacus.flash(true);
       setTimeout(() => window.spartacus.flash(false), 45000);
-      if (long) {
-        setMode('long');
-        toast('Cycle complete \u2014 take a long break.');
-      } else {
-        setMode('short');
-        toast('Focus session done \u2014 short break.');
-      }
+      mode = long ? 'long' : 'short';
+      remaining = modeTotal(mode);
+      remainingByMode[mode] = remaining;
+      if (long) toast('Cycle complete \u2014 take a long break.');
+      else toast('Focus session done \u2014 short break.');
     } else {
       Engine.chime();
       if (settings.notify) window.spartacus.notify('SPARTACUS', 'Break over \u2014 time to focus.');
-      if (mode === 'long') {
+      if (finished === 'long') {
         completed = 0;
         saveJSON('spartacus.completed', completed);
       }
-      setMode('focus');
+      mode = 'focus';
+      remaining = modeTotal('focus');
+      remainingByMode.focus = remaining;
       toast('Break over \u2014 time to focus.');
     }
+    render();
   }
 
   function skip() {
+    running = false;
+    activeMode = null;
+    clearInterval(intervalId);
+    Engine.stopAlarm();
+    window.spartacus.flash(false);
     if (mode === 'focus') {
       completed += 1;
       saveJSON('spartacus.completed', completed);
-      setMode(completed % settings.sessions === 0 ? 'long' : 'short');
+      remainingByMode.focus = modeTotal('focus');
+      mode = completed % settings.sessions === 0 ? 'long' : 'short';
     } else {
       if (mode === 'long') {
         completed = 0;
         saveJSON('spartacus.completed', completed);
       }
-      setMode('focus');
+      remainingByMode[mode] = modeTotal(mode);
+      mode = 'focus';
     }
+    remaining = modeTotal(mode);
+    remainingByMode[mode] = remaining;
+    render();
   }
 
   function applySettings() {
     completed = 0;
     saveJSON('spartacus.completed', completed);
-    setMode('focus');
+    running = false;
+    activeMode = null;
+    clearInterval(intervalId);
+    remainingByMode = { focus: modeTotal('focus'), short: modeTotal('short'), long: modeTotal('long') };
+    mode = 'focus';
+    remaining = remainingByMode.focus;
+    render();
   }
 
   // React to minimize/restore: full-speed rendering only while visible.
@@ -609,6 +641,7 @@ const Timer = (() => {
   });
 
   function render() {
+    const total = modeTotal(mode);
     const frac = total > 0 ? remaining / total : 0;
     $('#timeDisplay').textContent = fmtTime(remaining);
     $('#modeLabel').textContent = MODES[mode];
@@ -1030,6 +1063,7 @@ function renderUpdateStatus() {
 window.spartacus.onUpdateStatus((s) => {
   updateStatus = s;
   renderUpdateStatus();
+  if (window.spartacus.smoke) console.log('[smoke] update status:', s.state, s.message || s.version || '');
   if (s.state === 'downloading') toast('Update downloading in the background\u2026');
   else if (s.state === 'ready') toast('Update ready \u2014 restart to install.');
 });
@@ -1354,4 +1388,21 @@ if (window.spartacus.smoke) {
       Player.toggle(); // pause again
     }, 3000);
   }, 9000);
+  setTimeout(() => {
+    // Per-tab memory: switching tabs must not reset their timers.
+    Timer.setMode('short');
+    const t1 = document.getElementById('timeDisplay').textContent;
+    Timer.toggle(); // start the break countdown
+    setTimeout(() => {
+      Timer.pause();
+      const t2 = document.getElementById('timeDisplay').textContent;
+      Timer.setMode('focus');
+      const f1 = document.getElementById('timeDisplay').textContent;
+      Timer.setMode('short');
+      const t3 = document.getElementById('timeDisplay').textContent;
+      console.log('[smoke] tab memory | short start:', t1, '| after pause:', t2,
+        '| focus untouched:', f1, '| short restored:', t3,
+        '|', (t2 === t3 && f1 === '25:00') ? 'OK' : 'FAIL');
+    }, 2200);
+  }, 14000);
 }
