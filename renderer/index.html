@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src spartacus:; connect-src 'none'; object-src 'none'; base-uri 'none'" />
+  <title>SPARTACUS</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="bg"></div>
+  <div class="overlay"></div>
+
+  <header class="titlebar">
+    <div class="brand"><span class="brand-mark"></span><span>SPARTACUS</span></div>
+    <div class="spacer"></div>
+    <button class="tb-btn tb-settings" id="btnSettings">SETTINGS</button>
+    <button class="tb-btn" id="tbMin" title="Minimize">&#9472;</button>
+    <button class="tb-btn" id="tbMax" title="Maximize">&#9633;</button>
+    <button class="tb-btn tb-close" id="tbClose" title="Close">&#10005;</button>
+  </header>
+
+  <main>
+    <section class="pane timer-pane">
+      <div class="mode-tabs" id="modeTabs">
+        <button class="mode-tab active" data-mode="focus">FOCUS</button>
+        <button class="mode-tab" data-mode="short">BREAK</button>
+        <button class="mode-tab" data-mode="long">LONG</button>
+      </div>
+
+      <div class="ring-wrap">
+        <svg class="ring" viewBox="0 0 300 300">
+          <circle class="ring-track" cx="150" cy="150" r="140"></circle>
+          <circle class="ring-progress" id="ringProgress" cx="150" cy="150" r="140"></circle>
+        </svg>
+        <div class="ring-center">
+          <div class="time" id="timeDisplay">25:00</div>
+          <div class="time-label" id="modeLabel">FOCUS</div>
+        </div>
+      </div>
+
+      <div class="timer-controls">
+        <button class="btn primary" id="startPauseBtn">START</button>
+        <button class="btn" id="resetBtn">RESET</button>
+        <button class="btn" id="skipBtn">SKIP</button>
+      </div>
+
+      <div class="sessions-block">
+        <div class="sessions" id="sessionDots"></div>
+        <div class="session-label" id="sessionLabel"></div>
+      </div>
+    </section>
+
+    <section class="pane right-pane">
+      <div class="card ambience-card">
+        <div class="card-head">
+          <h2>AMBIENCE</h2>
+          <div class="master-vol">
+            <span>VOL</span>
+            <input type="range" id="masterVol" min="0" max="100" />
+          </div>
+        </div>
+        <div class="sound-grid" id="soundGrid"></div>
+      </div>
+
+      <div class="card music-card">
+        <div class="card-head"><h2>MUSIC &middot; YOUTUBE AUDIO</h2></div>
+        <div class="yt-form">
+          <input type="text" id="ytInput" placeholder="PASTE A YOUTUBE LINK &#8212; AUDIO ONLY" spellcheck="false" />
+          <button class="btn small" id="ytAddBtn">ADD</button>
+        </div>
+        <div class="player">
+          <div class="player-btns">
+            <button class="icon-btn" id="prevBtn" title="Previous">&#171;</button>
+            <button class="icon-btn main" id="playBtn" title="Play / Pause">&#9654;</button>
+            <button class="icon-btn" id="nextBtn" title="Next">&#187;</button>
+          </div>
+          <div class="now-playing">
+            <div class="np-title" id="npTitle">NOTHING PLAYING</div>
+            <div class="np-meta" id="npMeta">ADD A YOUTUBE LINK ABOVE</div>
+          </div>
+          <div class="player-vol">
+            <span>VOL</span>
+            <input type="range" id="musicVol" min="0" max="100" />
+          </div>
+        </div>
+        <ul class="queue" id="queueList"></ul>
+      </div>
+    </section>
+  </main>
+
+  <div class="overlay-modal" id="settingsOverlay">
+    <div class="modal">
+      <h3>SETTINGS</h3>
+      <div class="field"><label for="setFocus">Focus minutes</label><input type="number" id="setFocus" min="1" max="180" /></div>
+      <div class="field"><label for="setShort">Short break</label><input type="number" id="setShort" min="1" max="60" /></div>
+      <div class="field"><label for="setLong">Long break</label><input type="number" id="setLong" min="1" max="120" /></div>
+      <div class="field"><label for="setSessions">Rounds / cycle</label><input type="number" id="setSessions" min="1" max="12" /></div>
+      <div class="actions">
+        <button class="btn" id="settingsCancel">CANCEL</button>
+        <button class="btn primary" id="settingsSave">SAVE</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

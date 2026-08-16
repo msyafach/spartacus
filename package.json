@@ -1,0 +1,61 @@
+{
+  "name": "spartacus",
+  "productName": "Spartacus",
+  "version": "1.0.0",
+  "description": "Minimalist black & white focus companion: Pomodoro timer, generative ambient soundscapes, and YouTube audio-only music.",
+  "main": "main.js",
+  "author": {
+    "name": "Spartacus"
+  },
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.spartacus.focus",
+    "productName": "Spartacus",
+    "artifactName": "Spartacus-Setup-${version}.exe",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "assets/**/*",
+      "bin/yt-dlp.exe",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "bin/yt-dlp.exe"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Spartacus",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeader": "assets/installer-header.bmp",
+      "installerSidebar": "assets/installer-sidebar.bmp",
+      "uninstallerSidebar": "assets/installer-sidebar.bmp",
+      "license": "LICENSE",
+      "uninstallDisplayName": "Spartacus"
+    }
+  },
+  "devDependencies": {
+    "electron": "^43.4.0",
+    "electron-builder": "^26.15.3"
+  }
+}
