@@ -79,6 +79,7 @@ Updates arrive automatically. When a new version is ready you get a notification
 - Keyboard shortcuts: `Space` start or pause the timer, `R` reset, `S` skip, `Esc` leave mini mode.
 - Built-in music: MISE (Blurred Memories, public domain), plus Lukrembo, Kalaido, Kerusu, and Matt Quentin (royalty free, credited here).
 - Background photos from Unsplash (free license).
+- App icon: Spartan helmet by Delapouite from game-icons.net (CC BY 3.0).
 
 ## Building from source
 
