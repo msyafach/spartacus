@@ -18,7 +18,7 @@
     "artifactName": "Spartacus-Setup-${version}.exe",
     "publish": {
       "provider": "github",
-      "owner": "your-github-username",
+      "owner": "msyafach",
       "repo": "spartacus"
     },
     "directories": {

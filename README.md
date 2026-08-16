@@ -72,8 +72,22 @@ The app uses `electron-updater` with GitHub Releases:
 - On launch it quietly checks for updates and downloads them in the background
 - When an update is ready you get a notification; restart to install (or use
   Settings → Check for updates → Restart & install)
-- To enable publishing, set your repo in `package.json` (`build.publish`) and release with:
-  `GH_TOKEN=<github-token> npm run dist` then `npx electron-builder --publish always`
+
+**Publishing a release** (two ways):
+
+1. **Automated (recommended)** — push a version tag; GitHub Actions builds the
+   installer and creates the release (`.github/workflows/release.yml`):
+   ```bash
+   git tag v1.1.0 && git push origin v1.1.0
+   ```
+2. **Manual** — build locally and upload `dist/Spartacus-Setup-<version>.exe`
+   as a release asset:
+   ```bash
+   GH_TOKEN=<github-token> npx electron-builder --win --publish always
+   ```
+
+Bump `version` in `package.json` before tagging — users on older versions
+receive the update automatically.
 
 - YouTube playback requires an internet connection; ambient sounds do not.
 - On first play a track is downloaded (a few seconds) — afterwards it plays instantly from cache.
