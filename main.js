@@ -3,6 +3,7 @@
 const { app, BrowserWindow, ipcMain, protocol, session, shell, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const https = require('https');
 const { spawn } = require('child_process');
 const { Readable } = require('stream');
 const { autoUpdater } = require('electron-updater');
@@ -277,18 +278,29 @@ async function handleAudioRequest(request) {
   } catch {
     return new Response('Bad request', { status: 400 });
   }
+
+  // Bundled built-in lofi tracks (assets/music — fs works inside asar).
+  if (u.hostname === 'builtin') {
+    const name = path.basename(u.pathname);
+    if (!/^[a-z0-9-]+\.mp3$/.test(name)) return new Response('Not found', { status: 404 });
+    return serveFile(path.join(app.getAppPath(), 'assets', 'music', name), request);
+  }
+
+  // Extracted YouTube audio cache.
   const name = path.basename(u.pathname);
   if (!/^[A-Za-z0-9_-]{6,20}\.(webm|m4a|mp4|opus|ogg|mp3|aac|flac)$/.test(name)) {
     return new Response('Not found', { status: 404 });
   }
-  const file = path.join(CACHE_DIR, name);
+  return serveFile(path.join(CACHE_DIR, name), request);
+}
+
+function serveFile(file, request) {
   let stat;
   try {
     stat = fs.statSync(file);
   } catch {
     return new Response('Not found', { status: 404 });
   }
-
   const range = parseRange(request.headers.get('range'), stat.size);
   if (range && range.invalid) {
     return new Response('Bad range', { status: 416, headers: { 'Content-Range': `bytes */${stat.size}` } });
@@ -296,7 +308,7 @@ async function handleAudioRequest(request) {
   const start = range ? range.start : 0;
   const end = range ? range.end : stat.size - 1;
   const stream = fs.createReadStream(file, { start, end });
-  const ext = path.extname(name).slice(1).toLowerCase();
+  const ext = path.extname(file).slice(1).toLowerCase();
   const headers = {
     'Content-Type': AUDIO_EXT[ext] || 'application/octet-stream',
     'Accept-Ranges': 'bytes',
@@ -414,9 +426,9 @@ ipcMain.on('win:mini-mode', (_e, on) => {
   if (!mainWindow) return;
   if (on) {
     if (mainWindow.isMaximized()) mainWindow.unmaximize();
-    mainWindow.setMinimumSize(264, 108);
-    mainWindow.setMaximumSize(264, 108);
-    mainWindow.setSize(264, 108);
+    mainWindow.setMinimumSize(264, 124);
+    mainWindow.setMaximumSize(264, 124);
+    mainWindow.setSize(264, 124);
     mainWindow.setAlwaysOnTop(true, 'floating');
   } else {
     mainWindow.setAlwaysOnTop(false);
@@ -430,6 +442,63 @@ ipcMain.on('notify', (_e, { title, body }) => {
   new Notification({ title: title || 'Spartacus', body: body || '' }).show();
 });
 ipcMain.handle('app:version', () => app.getVersion());
+
+/* ---------- motivational quotes (fetched in the main process — no CORS) ---------- */
+
+const QUOTE_ENDPOINTS = [
+  {
+    name: 'dummyjson',
+    url: 'https://dummyjson.com/quotes/random',
+    parse: (j) => (j && j.quote ? { text: j.quote, author: j.author || '' } : null),
+  },
+  {
+    name: 'zenquotes',
+    url: 'https://zenquotes.io/api/random',
+    parse: (j) => (Array.isArray(j) && j[0] && j[0].q ? { text: j[0].q, author: j[0].a || '' } : null),
+  },
+  {
+    name: 'adviceslip',
+    url: 'https://api.adviceslip.com/advice',
+    parse: (j) => (j && j.slip && j.slip.advice ? { text: j.slip.advice, author: '' } : null),
+  },
+  {
+    name: 'affirmations',
+    url: 'https://www.affirmations.dev/',
+    parse: (j) => (j && j.affirmation ? { text: j.affirmation, author: '' } : null),
+  },
+];
+
+function httpGetJson(url, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { headers: { 'User-Agent': 'Spartacus/1.0', Accept: 'application/json' } }, (res) => {
+      if (res.statusCode !== 200) {
+        res.resume();
+        reject(new Error('status ' + res.statusCode));
+        return;
+      }
+      let body = '';
+      res.on('data', (c) => { if (body.length < 200000) body += c; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(body)); } catch (e) { reject(e); }
+      });
+    });
+    req.setTimeout(timeoutMs, () => req.destroy(new Error('timeout')));
+    req.on('error', reject);
+  });
+}
+
+async function fetchQuote() {
+  for (const ep of QUOTE_ENDPOINTS) {
+    try {
+      const j = await httpGetJson(ep.url, 8000);
+      const q = ep.parse(j);
+      if (q && q.text) return { ok: true, quote: q, source: ep.name };
+    } catch { /* try the next endpoint */ }
+  }
+  return { ok: false };
+}
+
+ipcMain.handle('quote:fetch', () => fetchQuote());
 
 /* ---------- updates (electron-updater, packaged builds only) ---------- */
 

@@ -8,7 +8,8 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="bg"></div>
+  <div class="bg" id="bgA"></div>
+  <div class="bg bg-layer" id="bgB"></div>
   <div class="overlay"></div>
 
   <header class="titlebar">
@@ -27,10 +28,17 @@
       <span class="mini-time" id="miniTime">25:00</span>
     </div>
     <div class="mini-progress"><div class="mini-progress-fill" id="miniProgressFill"></div></div>
+    <div class="mini-quote" id="miniQuote"></div>
   </div>
 
   <main>
     <section class="pane timer-pane">
+      <div class="view-tabs" id="viewTabs">
+        <button class="view-tab active" data-view="timer">TIMER</button>
+        <button class="view-tab" data-view="goals">GOALS</button>
+      </div>
+
+      <div class="timer-view" id="timerView">
       <div class="mode-tabs" id="modeTabs">
         <button class="mode-tab active" data-mode="focus">FOCUS</button>
         <button class="mode-tab" data-mode="short">BREAK</button>
@@ -58,6 +66,47 @@
         <div class="sessions" id="sessionDots"></div>
         <div class="session-label" id="sessionLabel"></div>
       </div>
+
+      <div class="quote" id="quoteLine" title="Click to refresh">
+        <div class="quote-text" id="quoteText">STAY FOCUSED. ONE SESSION AT A TIME.</div>
+        <div class="quote-author" id="quoteAuthor"></div>
+      </div>
+      </div>
+
+      <div class="goals-view hidden" id="goalsView">
+        <div class="goal-card">
+          <div class="goal-head"><h3>VISION &middot; 5 YEARS</h3><span class="goal-count" id="visionCount">0/0</span></div>
+          <ul class="goal-list" id="visionList"></ul>
+          <div class="goal-add">
+            <input type="text" id="visionInput" placeholder="ADD A 5-YEAR GOAL" spellcheck="false" />
+            <button class="btn small" id="visionAddBtn">ADD</button>
+          </div>
+        </div>
+        <div class="goal-card">
+          <div class="goal-head"><h3 id="yearLabel">THIS YEAR</h3><span class="goal-count" id="yearCount">0/0</span></div>
+          <ul class="goal-list" id="yearList"></ul>
+          <div class="goal-add">
+            <input type="text" id="yearInput" placeholder="ADD A YEARLY GOAL" spellcheck="false" />
+            <button class="btn small" id="yearAddBtn">ADD</button>
+          </div>
+        </div>
+        <div class="goal-card">
+          <div class="goal-head"><h3 id="quarterLabel">THIS QUARTER</h3><span class="goal-count" id="quarterCount">0/0</span></div>
+          <ul class="goal-list" id="quarterList"></ul>
+          <div class="goal-add">
+            <input type="text" id="quarterInput" placeholder="ADD A QUARTERLY GOAL" spellcheck="false" />
+            <button class="btn small" id="quarterAddBtn">ADD</button>
+          </div>
+        </div>
+        <div class="goal-card">
+          <div class="goal-head"><h3 id="monthLabel">THIS MONTH</h3><span class="goal-count" id="monthCount">0/0</span></div>
+          <ul class="goal-list" id="monthList"></ul>
+          <div class="goal-add">
+            <input type="text" id="monthInput" placeholder="ADD A MONTHLY GOAL" spellcheck="false" />
+            <button class="btn small" id="monthAddBtn">ADD</button>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section class="pane right-pane">
@@ -70,6 +119,17 @@
           </div>
         </div>
         <div class="sound-grid" id="soundGrid"></div>
+      </div>
+
+      <div class="card builtin-card">
+        <div class="card-head">
+          <h2>BUILT-IN LOFI</h2>
+          <div class="master-vol">
+            <span>VOL</span>
+            <input type="range" id="builtinVol" min="0" max="100" />
+          </div>
+        </div>
+        <ul class="queue" id="builtinList"></ul>
       </div>
 
       <div class="card music-card">
@@ -116,6 +176,10 @@
           <button class="btn small" id="updateCheckBtn">CHECK FOR UPDATES</button>
           <button class="btn small primary hidden" id="updateInstallBtn">RESTART &amp; INSTALL</button>
         </div>
+      </div>
+      <div class="credits">
+        BUILT-IN MUSIC: MISE \u2014 BLURRED MEMORIES (CC0 / PUBLIC DOMAIN) \u00b7
+        LUKREMBO, KALAIDO, KERUSU, MATT QUENTIN (ROYALTY-FREE, USED WITH CREDIT)
       </div>
       <div class="actions">
         <button class="btn" id="settingsCancel">CANCEL</button>

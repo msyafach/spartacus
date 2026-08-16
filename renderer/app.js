@@ -641,21 +641,82 @@ const Timer = (() => {
 
 /* ================= youtube audio player ================= */
 
+// Bundled royalty-free/CC0 lofi tracks (see Settings → credits).
+// Each track has its own themed background (Unsplash, free license).
+const BUILTIN_TRACKS = [
+  { id: 'hanging-lanterns', file: 'hanging-lanterns.mp3', title: 'Hanging Lanterns', author: 'Kalaido', duration: 234 },
+  { id: 'bread', file: 'bread.mp3', title: 'Bread', author: 'Lukrembo', duration: 160 },
+  { id: 'first-snow', file: 'first-snow.mp3', title: 'First Snow', author: 'Kerusu', duration: 193 },
+  { id: 'waves', file: 'waves.mp3', title: 'Waves', author: 'Matt Quentin', duration: 202 },
+  { id: 'pearl', file: 'pearl.mp3', title: 'Pearl', author: 'MISE', duration: 99 },
+  { id: 'flicker', file: 'flicker.mp3', title: 'Flicker', author: 'MISE', duration: 120 },
+  { id: 'skin', file: 'skin.mp3', title: 'Skin', author: 'MISE', duration: 100 },
+  { id: 'pieces-of-stars', file: 'pieces-of-stars.mp3', title: 'Pieces of Stars', author: 'MISE', duration: 106 },
+  { id: 'moment', file: 'moment.mp3', title: 'Moment', author: 'MISE', duration: 77 },
+];
+
+const BUILTIN_BG = {
+  'hanging-lanterns': '../assets/backgrounds/hanging-lanterns.jpg',
+  'bread': '../assets/backgrounds/bread.jpg',
+  'first-snow': '../assets/backgrounds/first-snow.jpg',
+  'waves': '../assets/backgrounds/waves.jpg',
+  'pearl': '../assets/backgrounds/pearl.jpg',
+  'flicker': '../assets/backgrounds/flicker.jpg',
+  'skin': '../assets/backgrounds/skin.jpg',
+  'pieces-of-stars': '../assets/backgrounds/pieces-of-stars.jpg',
+  'moment': '../assets/backgrounds/moment.jpg',
+};
+const DEFAULT_BG = '../assets/background.jpg';
+
+/* Crossfading background: two stacked layers, one visible at a time.
+   Images are local files — they decode in well under the 1.4 s fade,
+   so lazy loading keeps memory low without visible pop-in. */
+let bgA = true;
+let currentBg = DEFAULT_BG;
+
+function setBackground(key) {
+  const url = (key && BUILTIN_BG[key]) || DEFAULT_BG;
+  if (url === currentBg) return;
+  const activeEl = bgA ? $('#bgA') : $('#bgB');
+  const nextEl = bgA ? $('#bgB') : $('#bgA');
+  nextEl.style.backgroundImage = 'url(' + url + ')';
+  nextEl.style.opacity = '1';
+  activeEl.style.opacity = '0';
+  bgA = !bgA;
+  currentBg = url;
+  // Free the previous layer's decoded bitmap after the fade completes.
+  setTimeout(() => { activeEl.style.backgroundImage = 'none'; }, 1600);
+}
+
 const Player = (() => {
   const audio = new Audio();
   let queue = loadJSON('spartacus.queue', []);
   let current = loadJSON('spartacus.current', -1);
+  const playstate = loadJSON('spartacus.playstate', { mode: 'youtube', builtinIdx: 0 });
+  let mode = playstate.mode === 'builtin' ? 'builtin' : 'youtube';
+  let builtinIdx = Math.min(Math.max(parseInt(playstate.builtinIdx, 10) || 0, 0), BUILTIN_TRACKS.length - 1);
   let loading = false;
   let fails = 0;
   let playToken = 0;
-  audio.volume = loadJSON('spartacus.musicvol', 0.85);
+  // Separate volumes: built-in lofi sits lower (background level),
+  // YouTube follows the music card slider.
+  let lofiVol = loadJSON('spartacus.lofivol', 0.45);
+  let ytVol = loadJSON('spartacus.musicvol', 0.85);
+  audio.volume = mode === 'builtin' ? lofiVol : ytVol;
   audio.preload = 'none';
+
+  const persistPlaystate = () => saveJSON('spartacus.playstate', { mode, builtinIdx });
+
+  function currentTrack() {
+    return mode === 'builtin' ? BUILTIN_TRACKS[builtinIdx] : queue[current] || null;
+  }
 
   audio.addEventListener('playing', () => { loading = false; fails = 0; render(); });
   audio.addEventListener('waiting', () => { loading = true; render(); });
   audio.addEventListener('pause', render);
   audio.addEventListener('ended', () => {
-    if (queue.length > 1) next();
+    if (mode === 'builtin') playBuiltin((builtinIdx + 1) % BUILTIN_TRACKS.length);
+    else if (queue.length > 1) next();
     else render();
   });
   audio.addEventListener('error', () => {
@@ -665,16 +726,29 @@ const Player = (() => {
 
   function advanceOnFailure() {
     fails += 1;
-    if (fails < queue.length && queue.length > 1) next();
-    else { loading = false; render(); }
+    const total = mode === 'builtin' ? BUILTIN_TRACKS.length : queue.length;
+    if (fails < total && total > 1) {
+      if (mode === 'builtin') playBuiltin((builtinIdx + 1) % BUILTIN_TRACKS.length);
+      else next();
+    } else {
+      loading = false;
+      render();
+    }
   }
 
   async function play() {
-    const t = queue[current];
+    const t = currentTrack();
     if (!t) return;
     const token = ++playToken;
     loading = true;
     render();
+    if (mode === 'builtin') {
+      audio.volume = lofiVol;
+      audio.src = window.spartacus.builtinUrl(t.file);
+      setBackground(t.id);
+      audio.play().catch(() => {});
+      return;
+    }
     const res = await window.spartacus.prepareTrack(t.url, t.id);
     if (token !== playToken) return; // user moved on meanwhile
     if (!res || !res.ok) {
@@ -682,12 +756,14 @@ const Player = (() => {
       advanceOnFailure();
       return;
     }
+    audio.volume = ytVol;
     audio.src = res.fileUrl;
+    setBackground('default');
     audio.play().catch(() => {});
   }
 
   function toggle() {
-    const t = queue[current];
+    const t = currentTrack();
     if (!t) return;
     if (audio.paused) {
       if (audio.currentSrc) audio.play().catch(() => {});
@@ -697,26 +773,47 @@ const Player = (() => {
     }
   }
 
+  function playBuiltin(i) {
+    if (i < 0 || i >= BUILTIN_TRACKS.length) return;
+    mode = 'builtin';
+    builtinIdx = i;
+    persistPlaystate();
+    play();
+  }
+
   function playAt(i) {
     if (i < 0 || i >= queue.length) return;
+    mode = 'youtube';
     current = i;
+    persistPlaystate();
     saveJSON('spartacus.current', current);
     play();
   }
 
-  function next() { if (queue.length) playAt((current + 1) % queue.length); }
-  function prev() { if (queue.length) playAt((current - 1 + queue.length) % queue.length); }
+  function next() {
+    if (mode === 'builtin') playBuiltin((builtinIdx + 1) % BUILTIN_TRACKS.length);
+    else if (queue.length) playAt((current + 1) % queue.length);
+  }
+
+  function prev() {
+    if (mode === 'builtin') playBuiltin((builtinIdx - 1 + BUILTIN_TRACKS.length) % BUILTIN_TRACKS.length);
+    else if (queue.length) playAt((current - 1 + queue.length) % queue.length);
+  }
 
   function remove(i) {
     if (i < 0 || i >= queue.length) return;
-    const wasCurrent = i === current;
+    const wasCurrent = mode === 'youtube' && i === current;
     const [removed] = queue.splice(i, 1);
     if (!wasCurrent) window.spartacus.uncache(removed.id);
     if (!queue.length) {
       current = -1;
-      playToken += 1;
-      audio.removeAttribute('src');
-      audio.load();
+      saveJSON('spartacus.current', current);
+      if (mode === 'youtube') {
+        playToken += 1;
+        audio.removeAttribute('src');
+        audio.load();
+        setBackground('default');
+      }
     } else if (wasCurrent) {
       playToken += 1;
       current = Math.min(i, queue.length - 1);
@@ -761,7 +858,7 @@ const Player = (() => {
   }
 
   function render() {
-    const t = queue[current];
+    const t = currentTrack();
     if (t) {
       $('#npTitle').textContent = t.title;
       $('#npMeta').textContent =
@@ -769,7 +866,7 @@ const Player = (() => {
       $('#playBtn').textContent = audio.paused ? '\u25b6' : '\u275a\u275a';
     } else {
       $('#npTitle').textContent = 'NOTHING PLAYING';
-      $('#npMeta').textContent = 'ADD A YOUTUBE LINK ABOVE';
+      $('#npMeta').textContent = 'PICK A LOFI TRACK OR ADD A YOUTUBE LINK';
       $('#playBtn').textContent = '\u25b6';
     }
 
@@ -780,11 +877,43 @@ const Player = (() => {
       li.className = 'q-empty';
       li.textContent = 'Queue is empty \u2014 paste a link above';
       list.appendChild(li);
-      return;
+    } else {
+      queue.forEach((tr, i) => {
+        const li = document.createElement('li');
+        li.className = 'q-row' + (mode === 'youtube' && i === current ? ' current' : '');
+
+        const idx = document.createElement('span');
+        idx.className = 'q-idx';
+        idx.textContent = pad(i + 1);
+
+        const title = document.createElement('span');
+        title.className = 'q-title';
+        title.textContent = tr.title;
+
+        const dur = document.createElement('span');
+        dur.className = 'q-dur';
+        dur.textContent = fmtDur(tr.duration);
+
+        const rm = document.createElement('button');
+        rm.className = 'q-remove';
+        rm.textContent = '\u2715';
+        rm.title = 'Remove';
+        rm.addEventListener('click', (e) => { e.stopPropagation(); remove(i); });
+
+        li.append(idx, title, dur, rm);
+        li.addEventListener('click', () => {
+          if (mode === 'youtube' && i === current) toggle();
+          else playAt(i);
+        });
+        list.appendChild(li);
+      });
     }
-    queue.forEach((tr, i) => {
+
+    const bl = $('#builtinList');
+    bl.innerHTML = '';
+    BUILTIN_TRACKS.forEach((tr, i) => {
       const li = document.createElement('li');
-      li.className = 'q-row' + (i === current ? ' current' : '');
+      li.className = 'q-row' + (mode === 'builtin' && i === builtinIdx ? ' current' : '');
 
       const idx = document.createElement('span');
       idx.className = 'q-idx';
@@ -794,28 +923,32 @@ const Player = (() => {
       title.className = 'q-title';
       title.textContent = tr.title;
 
+      const author = document.createElement('span');
+      author.className = 'q-author';
+      author.textContent = tr.author;
+
       const dur = document.createElement('span');
       dur.className = 'q-dur';
       dur.textContent = fmtDur(tr.duration);
 
-      const rm = document.createElement('button');
-      rm.className = 'q-remove';
-      rm.textContent = '\u2715';
-      rm.title = 'Remove';
-      rm.addEventListener('click', (e) => { e.stopPropagation(); remove(i); });
-
-      li.append(idx, title, dur, rm);
+      li.append(idx, title, author, dur);
       li.addEventListener('click', () => {
-        if (i !== current) playAt(i);
-        else toggle();
+        if (mode === 'builtin' && i === builtinIdx) toggle();
+        else playBuiltin(i);
       });
-      list.appendChild(li);
+      bl.appendChild(li);
     });
 
-    $('#musicVol').value = Math.round(audio.volume * 100);
+    $('#musicVol').value = Math.round(ytVol * 100);
+    $('#builtinVol').value = Math.round(lofiVol * 100);
   }
 
-  return { render, add, toggle, next, prev, setVolume: (v) => { audio.volume = v; saveJSON('spartacus.musicvol', v); } };
+  return {
+    render, add, toggle, next, prev, playBuiltin,
+    setVolume: (v) => { ytVol = v; saveJSON('spartacus.musicvol', v); if (mode === 'youtube') audio.volume = v; },
+    setLofiVolume: (v) => { lofiVol = v; saveJSON('spartacus.lofivol', v); if (mode === 'builtin') audio.volume = v; },
+    isActuallyPlaying: () => !audio.paused && audio.currentTime > 0 && !audio.ended,
+  };
 })();
 
 /* ================= ambience UI ================= */
@@ -934,6 +1067,163 @@ function saveSettings() {
   toast('Settings saved.');
 }
 
+/* ================= goals ================= */
+
+const Goals = (() => {
+  const data = loadJSON('spartacus.goals', { vision: [], yearly: {}, quarterly: {}, monthly: {} });
+  // Normalize older persisted shapes (e.g., before yearly existed).
+  data.vision = data.vision || [];
+  data.yearly = data.yearly || {};
+  data.quarterly = data.quarterly || {};
+  data.monthly = data.monthly || {};
+  let yKey = '';
+  let qKey = '';
+  let mKey = '';
+  let Y_LABEL = '';
+  let Q_LABEL = '';
+  let M_LABEL = '';
+
+  // Recompute on every render so year/quarter/month rollovers apply even if
+  // the app stays open across the boundary.
+  function updatePeriod() {
+    const now = new Date();
+    const q = Math.floor(now.getMonth() / 3) + 1;
+    yKey = String(now.getFullYear());
+    qKey = now.getFullYear() + '-Q' + q;
+    mKey = now.getFullYear() + '-' + pad(now.getMonth() + 1);
+    Y_LABEL = String(now.getFullYear());
+    Q_LABEL = 'Q' + q + ' ' + now.getFullYear();
+    M_LABEL = now.toLocaleString('en-US', { month: 'long' }).toUpperCase() + ' ' + now.getFullYear();
+  }
+
+  const save = () => saveJSON('spartacus.goals', data);
+
+  const listFor = (kind) => {
+    if (kind === 'vision') return data.vision;
+    if (kind === 'year') { data.yearly[yKey] = data.yearly[yKey] || []; return data.yearly[yKey]; }
+    if (kind === 'quarter') { data.quarterly[qKey] = data.quarterly[qKey] || []; return data.quarterly[qKey]; }
+    data.monthly[mKey] = data.monthly[mKey] || [];
+    return data.monthly[mKey];
+  };
+
+  function add(kind, text) {
+    text = text.trim();
+    if (!text) return;
+    listFor(kind).push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text, done: false });
+    save();
+    render();
+  }
+
+  function toggle(kind, id) {
+    const it = listFor(kind).find((x) => x.id === id);
+    if (it) { it.done = !it.done; save(); render(); }
+  }
+
+  function remove(kind, id) {
+    const arr = listFor(kind);
+    const idx = arr.findIndex((x) => x.id === id);
+    if (idx >= 0) { arr.splice(idx, 1); save(); render(); }
+  }
+
+  function renderList(ulId, arr, kind, countId) {
+    const ul = $('#' + ulId);
+    ul.innerHTML = '';
+    const done = arr.filter((i) => i.done).length;
+    $('#' + countId).textContent = done + '/' + arr.length;
+    if (!arr.length) {
+      const li = document.createElement('li');
+      li.className = 'q-empty';
+      li.textContent = 'No goals yet \u2014 add one below';
+      ul.appendChild(li);
+      return;
+    }
+    arr.forEach((it) => {
+      const li = document.createElement('li');
+      li.className = 'goal-row' + (it.done ? ' done' : '');
+
+      const chk = document.createElement('button');
+      chk.className = 'goal-check';
+      chk.title = 'Toggle done';
+      chk.addEventListener('click', () => toggle(kind, it.id));
+
+      const txt = document.createElement('span');
+      txt.className = 'goal-text';
+      txt.textContent = it.text;
+
+      const rm = document.createElement('button');
+      rm.className = 'goal-remove';
+      rm.textContent = '\u2715';
+      rm.title = 'Remove';
+      rm.addEventListener('click', () => remove(kind, it.id));
+
+      li.append(chk, txt, rm);
+      ul.appendChild(li);
+    });
+  }
+
+  function render() {
+    updatePeriod();
+    renderList('visionList', data.vision, 'vision', 'visionCount');
+    renderList('yearList', listFor('year'), 'year', 'yearCount');
+    renderList('quarterList', listFor('quarter'), 'quarter', 'quarterCount');
+    renderList('monthList', listFor('month'), 'month', 'monthCount');
+    $('#yearLabel').textContent = Y_LABEL;
+    $('#quarterLabel').textContent = Q_LABEL;
+    $('#monthLabel').textContent = M_LABEL;
+  }
+
+  return { render, add, toggle, remove };
+})();
+
+/* ================= motivational quote ================= */
+
+const Quote = (() => {
+  let cached = loadJSON('spartacus.quote', null);
+  let refreshing = false;
+
+  function show(q) {
+    $('#quoteText').textContent = q.text;
+    $('#quoteAuthor').textContent = q.author ? '\u2014 ' + q.author : '';
+    $('#miniQuote').textContent = q.text;
+  }
+
+  async function refresh(manual = false) {
+    if (refreshing) return false;
+    refreshing = true;
+    try {
+      const res = await window.spartacus.fetchQuote();
+      if (res && res.ok && res.quote && res.quote.text) {
+        cached = { text: res.quote.text, author: res.quote.author || '', t: Date.now(), source: res.source };
+        saveJSON('spartacus.quote', cached);
+        show(cached);
+        if (window.spartacus.smoke) console.log('[smoke] quote fetched from', res.source, ':', cached.text.slice(0, 60));
+        if (manual) toast('Quote refreshed.');
+        return true;
+      }
+      if (manual) toast('Could not reach the quote service \u2014 check your connection.');
+      return false;
+    } finally {
+      refreshing = false;
+    }
+  }
+
+  function init() {
+    if (cached && cached.text) show(cached);
+    refresh(); // fetch a fresh one in the background
+    setInterval(() => refresh(), 30 * 60 * 1000); // rotate every 30 minutes
+  }
+
+  return { init, refresh };
+})();
+
+/* ================= view tabs ================= */
+
+function setView(v) {
+  $('#timerView').classList.toggle('hidden', v !== 'timer');
+  $('#goalsView').classList.toggle('hidden', v !== 'goals');
+  $$('.view-tab').forEach((t) => t.classList.toggle('active', t.dataset.view === v));
+}
+
 /* ================= mini mode ================= */
 
 let miniMode = false;
@@ -961,6 +1251,26 @@ $('#resetBtn').addEventListener('click', () => Timer.reset());
 $('#skipBtn').addEventListener('click', () => Timer.skip());
 $$('.mode-tab').forEach((t) => t.addEventListener('click', () => Timer.setMode(t.dataset.mode)));
 
+$('#viewTabs').addEventListener('click', (e) => {
+  const b = e.target.closest('.view-tab');
+  if (b) setView(b.dataset.view);
+});
+
+// Goals wiring: ADD buttons + Enter key
+const bindGoalInput = (inputId, btnId, kind) => {
+  const input = $('#' + inputId);
+  const add = () => { Goals.add(kind, input.value); input.value = ''; input.focus(); };
+  $('#' + btnId).addEventListener('click', add);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
+};
+bindGoalInput('visionInput', 'visionAddBtn', 'vision');
+bindGoalInput('yearInput', 'yearAddBtn', 'year');
+bindGoalInput('quarterInput', 'quarterAddBtn', 'quarter');
+bindGoalInput('monthInput', 'monthAddBtn', 'month');
+
+// Click the quote to fetch a fresh one from the API.
+$('#quoteLine').addEventListener('click', () => Quote.refresh(true));
+
 $('#ytAddBtn').addEventListener('click', () => Player.add($('#ytInput').value.trim()));
 $('#ytInput').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') Player.add(e.target.value.trim());
@@ -969,6 +1279,7 @@ $('#playBtn').addEventListener('click', () => Player.toggle());
 $('#nextBtn').addEventListener('click', () => Player.next());
 $('#prevBtn').addEventListener('click', () => Player.prev());
 $('#musicVol').addEventListener('input', (e) => Player.setVolume(e.target.value / 100));
+$('#builtinVol').addEventListener('input', (e) => Player.setLofiVolume(e.target.value / 100));
 $('#masterVol').addEventListener('input', (e) => Engine.setAmbientVol(e.target.value / 100));
 
 $('#btnSettings').addEventListener('click', openSettings);
@@ -1007,6 +1318,8 @@ document.addEventListener('keydown', (e) => {
 Timer.render();
 renderSounds();
 Player.render();
+Goals.render();
+Quote.init();
 
 // Smoke hook: exercise alarm + notification + taskbar flash without waiting.
 if (window.spartacus.smoke) {
@@ -1031,4 +1344,12 @@ if (window.spartacus.smoke) {
       console.log('[smoke] mini mode exited');
     }, 1500);
   }, 6000);
+  setTimeout(() => {
+    Player.playBuiltin(0);
+    setTimeout(() => {
+      console.log('[smoke] builtin lofi playing:', Player.isActuallyPlaying(), '| track:', BUILTIN_TRACKS[0].title,
+        '| background:', currentBg.includes('hanging-lanterns') ? 'switched OK' : 'NOT switched (' + currentBg + ')');
+      Player.toggle(); // pause again
+    }, 3000);
+  }, 9000);
 }
