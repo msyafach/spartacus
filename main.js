@@ -504,6 +504,59 @@ ipcMain.handle('app:version', () => app.getVersion());
 
 /* ---------- motivational quotes (fetched in the main process — no CORS) ---------- */
 
+// Curated library: quotes about focus, discipline, persistence and time.
+// Used whenever the live APIs return nothing relevant (or nothing at all).
+const QUOTE_LIBRARY = [
+  { text: 'No man is free who is not master of himself.', author: 'Epictetus' },
+  { text: 'First say to yourself what you would be; and then do what you have to do.', author: 'Epictetus' },
+  { text: 'How long are you going to wait before you demand the best for yourself?', author: 'Epictetus' },
+  { text: 'You have power over your mind, not outside events. Realize this, and you will find strength.', author: 'Marcus Aurelius' },
+  { text: 'It is not that we have a short time to live, but that we waste a lot of it.', author: 'Seneca' },
+  { text: 'We are what we repeatedly do. Excellence, then, is not an act, but a habit.', author: 'Will Durant' },
+  { text: 'Well begun is half done.', author: 'Aristotle' },
+  { text: 'The secret of getting ahead is getting started.', author: 'Mark Twain' },
+  { text: 'The way to get started is to quit talking and begin doing.', author: 'Walt Disney' },
+  { text: 'You don\'t have to be great to start, but you have to start to be great.', author: 'Zig Ziglar' },
+  { text: 'Start where you are. Use what you have. Do what you can.', author: 'Arthur Ashe' },
+  { text: 'Action is the foundational key to all success.', author: 'Pablo Picasso' },
+  { text: 'Do not wait; the time will never be just right.', author: 'Napoleon Hill' },
+  { text: 'The best time to plant a tree was twenty years ago. The second best time is now.', author: 'Chinese proverb' },
+  { text: 'A year from now you may wish you had started today.', author: 'Karen Lamb' },
+  { text: 'Someday is not a day of the week.', author: 'Janet Dailey' },
+  { text: 'You may delay, but time will not.', author: 'Benjamin Franklin' },
+  { text: 'Lost time is never found again.', author: 'Benjamin Franklin' },
+  { text: 'You will never find time for anything. If you want time, you must make it.', author: 'Charles Buxton' },
+  { text: 'Time is what we want most, but what we use worst.', author: 'William Penn' },
+  { text: 'The future depends on what you do today.', author: 'Mahatma Gandhi' },
+  { text: 'What you do today can improve all your tomorrows.', author: 'Ralph Marston' },
+  { text: 'Don\'t count the days, make the days count.', author: 'Muhammad Ali' },
+  { text: 'I hated every minute of training, but I said: do not quit. Suffer now and live the rest of your life as a champion.', author: 'Muhammad Ali' },
+  { text: 'Discipline is the bridge between goals and accomplishment.', author: 'Jim Rohn' },
+  { text: 'We must all suffer one of two things: the pain of discipline or the pain of regret.', author: 'Jim Rohn' },
+  { text: 'Motivation gets you going, but discipline keeps you growing.', author: 'John C. Maxwell' },
+  { text: 'Success is the sum of small efforts, repeated day in and day out.', author: 'Robert Collier' },
+  { text: 'Small deeds done are better than great deeds planned.', author: 'Peter Marshall' },
+  { text: 'The man who moves a mountain begins by carrying away small stones.', author: 'Confucius' },
+  { text: 'Little by little, one travels far.', author: 'J.R.R. Tolkien' },
+  { text: 'It always seems impossible until it is done.', author: 'Nelson Mandela' },
+  { text: 'If you are going through hell, keep going.', author: 'Winston Churchill' },
+  { text: 'Our greatest glory is not in never falling, but in rising every time we fall.', author: 'Confucius' },
+  { text: 'Concentrate all your thoughts upon the work in hand. The sun\'s rays do not burn until brought to a focus.', author: 'Alexander Graham Bell' },
+  { text: 'I fear not the man who has practiced ten thousand kicks once, but the man who has practiced one kick ten thousand times.', author: 'Bruce Lee' },
+  { text: 'Persistence and determination alone are omnipotent.', author: 'Calvin Coolidge' },
+  { text: 'Focus on being productive instead of busy.', author: 'Tim Ferriss' },
+  { text: 'Where focus goes, energy flows.', author: 'Tony Robbins' },
+  { text: 'Nothing will work unless you do.', author: 'Maya Angelou' },
+  { text: 'Do the hard jobs first. The easy jobs will take care of themselves.', author: 'Dale Carnegie' },
+  { text: 'The difference between ordinary and extraordinary is that little extra.', author: 'Jimmy Johnson' },
+  { text: 'He who has a why to live can bear almost any how.', author: 'Friedrich Nietzsche' },
+  { text: 'If you want to make an easy job seem mighty hard, just keep putting off doing it.', author: 'Olin Miller' },
+];
+
+// API quotes only make it in if they speak to focus, discipline, time,
+// effort or goals. Everything else is treated as noise and skipped.
+const RELEVANT_WORDS = /focus|discipline|work|habit|goal|persist|persever|courage|fight|time|mind|effort|action|consisten|diligent|determin|start|begin|lazy|procrastin|practice|patience|dream|future|today|tomorrow|small|step|grow|learn|study|win|champion|train/i;
+
 const QUOTE_ENDPOINTS = [
   {
     name: 'dummyjson',
@@ -514,11 +567,6 @@ const QUOTE_ENDPOINTS = [
     name: 'zenquotes',
     url: 'https://zenquotes.io/api/random',
     parse: (j) => (Array.isArray(j) && j[0] && j[0].q ? { text: j[0].q, author: j[0].a || '' } : null),
-  },
-  {
-    name: 'adviceslip',
-    url: 'https://api.adviceslip.com/advice',
-    parse: (j) => (j && j.slip && j.slip.advice ? { text: j.slip.advice, author: '' } : null),
   },
   {
     name: 'affirmations',
@@ -546,18 +594,22 @@ function httpGetJson(url, timeoutMs) {
   });
 }
 
-async function fetchQuote() {
+async function fetchQuote(lastText) {
+  // Try the live APIs first, but only accept quotes that fit the app.
   for (const ep of QUOTE_ENDPOINTS) {
     try {
       const j = await httpGetJson(ep.url, 8000);
       const q = ep.parse(j);
-      if (q && q.text) return { ok: true, quote: q, source: ep.name };
+      if (q && q.text && RELEVANT_WORDS.test(q.text)) return { ok: true, quote: q, source: ep.name };
     } catch { /* try the next endpoint */ }
   }
-  return { ok: false };
+  // Fall back to the curated library (avoid repeating the visible quote).
+  const pool = QUOTE_LIBRARY.filter((q) => q.text !== lastText);
+  const pick = pool.length ? pool[Math.floor(Math.random() * pool.length)] : QUOTE_LIBRARY[0];
+  return { ok: true, quote: pick, source: 'curated' };
 }
 
-ipcMain.handle('quote:fetch', () => fetchQuote());
+ipcMain.handle('quote:fetch', (_e, lastText) => fetchQuote(lastText));
 
 /* ---------- updates (electron-updater, packaged builds only) ---------- */
 

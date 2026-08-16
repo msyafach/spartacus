@@ -16,7 +16,7 @@ contextBridge.exposeInMainWorld('spartacus', {
   setMiniMode: (on) => ipcRenderer.send('win:mini-mode', !!on),
   notify: (title, body) => ipcRenderer.send('notify', { title, body }),
   getVersion: () => ipcRenderer.invoke('app:version'),
-  fetchQuote: () => ipcRenderer.invoke('quote:fetch'),
+  fetchQuote: (lastText) => ipcRenderer.invoke('quote:fetch', lastText),
   checkUpdates: () => ipcRenderer.send('updates:check'),
   installUpdate: () => ipcRenderer.send('updates:install'),
   updatesSupported: () => ipcRenderer.invoke('updates:supported'),

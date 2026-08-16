@@ -55,7 +55,7 @@ Click the minimize button and Spartacus becomes a small widget floating above yo
 
 ### Daily motivation
 
-A fresh quote appears in the app and in the mini window. It refreshes every 30 minutes, or click it to get a new one right away.
+A fresh quote appears in the app and in the mini window, refreshed every 30 minutes (or click it for a new one). Quotes are picked from a curated library about focus, discipline, and persistence, with relevant ones from live sources mixed in.
 
 ### Settings that stay out of your way
 

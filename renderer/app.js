@@ -1229,7 +1229,7 @@ const Quote = (() => {
     if (refreshing) return false;
     refreshing = true;
     try {
-      const res = await window.spartacus.fetchQuote();
+      const res = await window.spartacus.fetchQuote(cached ? cached.text : '');
       if (res && res.ok && res.quote && res.quote.text) {
         cached = { text: res.quote.text, author: res.quote.author || '', t: Date.now(), source: res.source };
         saveJSON('spartacus.quote', cached);
