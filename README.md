@@ -10,6 +10,10 @@ Most focus tools work against us. Timers are cluttered. Music apps are built to 
 
 Spartacus exists because staying focused should not be a fight. You get one place where your timer, your music, and your goals live together, with nothing else competing for your attention.
 
+### The name
+
+The app is named after Spartacus, the gladiator who refused to stay enslaved and fought for his freedom. The enemy here is smaller but just as real: laziness, distraction, and goals that slowly slip away. Every focused session is a small act of rebellion. You sit down, you fight for your time, and you take back a piece of your life.
+
 ## How
 
 Spartacus keeps the things that help you focus close, and the things that distract you far away.
