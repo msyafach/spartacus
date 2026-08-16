@@ -47,7 +47,7 @@ function toast(msg) {
 
 /* ================= settings ================= */
 
-const DEFAULT_SETTINGS = { focus: 25, short: 5, long: 15, sessions: 4 };
+const DEFAULT_SETTINGS = { focus: 25, short: 5, long: 15, sessions: 4, alarm: true, notify: true };
 const settings = { ...DEFAULT_SETTINGS, ...loadJSON('spartacus.settings', {}) };
 
 /* ================= ambient sound definitions ================= */
@@ -401,7 +401,86 @@ const Engine = (() => {
     });
   }
 
-  return { startSound, stopSound, isActive, setSoundVol, getAmbientVol, setAmbientVol, chime };
+  // Focus-complete alarm: gentle bell arpeggio (C5-E5-G5-C6) with a warm pad
+  // underneath, repeated three times. Bell timbre = inharmonic sine partials
+  // with exponential decay — clearly audible but pleasant.
+  let alarmSources = [];
+
+  const BELL_PARTIALS = [
+    { ratio: 1.0, gain: 1.0 },
+    { ratio: 2.76, gain: 0.5 },
+    { ratio: 5.4, gain: 0.22 },
+    { ratio: 8.93, gain: 0.1 },
+  ];
+
+  function scheduleBell(c, freq, t, amp, pan) {
+    const g = c.createGain();
+    const p = c.createStereoPanner();
+    p.pan.value = pan;
+    g.connect(p);
+    p.connect(c.destination);
+    const dur = 2.6;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(amp, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    const oscs = [];
+    for (const part of BELL_PARTIALS) {
+      const o = c.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = freq * part.ratio;
+      const og = c.createGain();
+      og.gain.value = part.gain;
+      o.connect(og);
+      og.connect(g);
+      o.start(t);
+      o.stop(t + dur + 0.05);
+      oscs.push(o);
+    }
+    alarmSources.push({
+      stop: () => oscs.forEach((o) => { try { o.stop(); } catch { /* ignore */ } }),
+    });
+  }
+
+  function alarm() {
+    const c = ensureCtx();
+    stopAlarm();
+    const melody = [523.25, 659.25, 783.99, 1046.5]; // C5 E5 G5 C6
+    const pans = [-0.35, 0.3, -0.2, 0.35];
+    const amps = [0.26, 0.26, 0.26, 0.32];
+
+    // Warm low pad (C4 + G4), barely audible, for body.
+    [261.63, 392.0].forEach((f) => {
+      const o = c.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = f;
+      const g = c.createGain();
+      const t = c.currentTime + 0.05;
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.07, t + 0.6);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 6.5);
+      o.connect(g);
+      g.connect(c.destination);
+      o.start(t);
+      o.stop(t + 6.6);
+      alarmSources.push({ stop: () => { try { o.stop(); } catch { /* ignore */ } } });
+    });
+
+    let t = c.currentTime + 0.05;
+    for (let rep = 0; rep < 3; rep++) {
+      for (let i = 0; i < melody.length; i++) {
+        scheduleBell(c, melody[i], t, amps[i], pans[i]);
+        t += 0.24;
+      }
+      t += 0.75; // breathe between repetitions
+    }
+  }
+
+  function stopAlarm() {
+    alarmSources.forEach((s) => s.stop());
+    alarmSources = [];
+  }
+
+  return { startSound, stopSound, isActive, setSoundVol, getAmbientVol, setAmbientVol, chime, alarm, stopAlarm };
 })();
 
 /* ================= pomodoro timer ================= */
@@ -437,6 +516,8 @@ const Timer = (() => {
   function start() {
     if (running || remaining <= 0) return;
     running = true;
+    Engine.stopAlarm();
+    window.spartacus.flash(false);
     endAt = Date.now() + remaining * 1000;
     scheduleTick();
     render();
@@ -470,11 +551,18 @@ const Timer = (() => {
     clearInterval(intervalId);
     running = false;
     remaining = 0;
-    Engine.chime();
     if (mode === 'focus') {
       completed += 1;
       saveJSON('spartacus.completed', completed);
-      if (completed % settings.sessions === 0) {
+      const long = completed % settings.sessions === 0;
+      if (settings.alarm) Engine.alarm();
+      else Engine.chime();
+      if (settings.notify) {
+        window.spartacus.notify('SPARTACUS', `Focus complete \u2014 time for a ${long ? 'long' : 'short'} break.`);
+      }
+      window.spartacus.flash(true);
+      setTimeout(() => window.spartacus.flash(false), 45000);
+      if (long) {
         setMode('long');
         toast('Cycle complete \u2014 take a long break.');
       } else {
@@ -482,6 +570,8 @@ const Timer = (() => {
         toast('Focus session done \u2014 short break.');
       }
     } else {
+      Engine.chime();
+      if (settings.notify) window.spartacus.notify('SPARTACUS', 'Break over \u2014 time to focus.');
       if (mode === 'long') {
         completed = 0;
         saveJSON('spartacus.completed', completed);
@@ -771,11 +861,58 @@ function renderSounds() {
 
 /* ================= settings UI ================= */
 
+let updatesSupported = false;
+let updateStatus = null;
+
+function renderUpdateStatus() {
+  const status = $('#updateStatus');
+  const checkBtn = $('#updateCheckBtn');
+  const installBtn = $('#updateInstallBtn');
+  status.classList.remove('ready');
+  installBtn.classList.add('hidden');
+  if (!updatesSupported) {
+    status.textContent = 'UPDATES WORK IN THE INSTALLED APP';
+    checkBtn.disabled = true;
+    return;
+  }
+  checkBtn.disabled = false;
+  switch (updateStatus && updateStatus.state) {
+    case 'checking': status.textContent = 'CHECKING\u2026'; break;
+    case 'downloading': status.textContent = 'DOWNLOADING\u2026'; break;
+    case 'ready':
+      status.textContent = 'UPDATE READY' + (updateStatus.version ? ' \u00b7 V' + updateStatus.version : '');
+      status.classList.add('ready');
+      installBtn.classList.remove('hidden');
+      break;
+    case 'error': status.textContent = 'CHECK FAILED \u2014 TRY LATER'; break;
+    default: status.textContent = 'UP TO DATE';
+  }
+}
+
+window.spartacus.onUpdateStatus((s) => {
+  updateStatus = s;
+  renderUpdateStatus();
+  if (s.state === 'downloading') toast('Update downloading in the background\u2026');
+  else if (s.state === 'ready') toast('Update ready \u2014 restart to install.');
+});
+
+window.spartacus.updatesSupported().then((v) => {
+  updatesSupported = v;
+  renderUpdateStatus();
+});
+
+window.spartacus.getVersion().then((v) => {
+  $('#updateVersion').textContent = 'VERSION ' + v;
+});
+
 function openSettings() {
   $('#setFocus').value = settings.focus;
   $('#setShort').value = settings.short;
   $('#setLong').value = settings.long;
   $('#setSessions').value = settings.sessions;
+  $('#setAlarm').checked = settings.alarm;
+  $('#setNotify').checked = settings.notify;
+  renderUpdateStatus();
   $('#settingsOverlay').classList.add('open');
 }
 
@@ -784,6 +921,8 @@ function saveSettings() {
   settings.short = clampInt($('#setShort').value, 1, 60);
   settings.long = clampInt($('#setLong').value, 1, 120);
   settings.sessions = clampInt($('#setSessions').value, 1, 12);
+  settings.alarm = $('#setAlarm').checked;
+  settings.notify = $('#setNotify').checked;
   saveJSON('spartacus.settings', settings);
   $('#settingsOverlay').classList.remove('open');
   Timer.applySettings();
@@ -814,6 +953,13 @@ $('#settingsOverlay').addEventListener('click', (e) => {
   if (e.target === e.currentTarget) $('#settingsOverlay').classList.remove('open');
 });
 
+$('#updateCheckBtn').addEventListener('click', () => {
+  updateStatus = { state: 'checking' };
+  renderUpdateStatus();
+  window.spartacus.checkUpdates();
+});
+$('#updateInstallBtn').addEventListener('click', () => window.spartacus.installUpdate());
+
 $('#tbMin').addEventListener('click', () => window.spartacus.minimize());
 $('#tbMax').addEventListener('click', () => window.spartacus.toggleMaximize());
 $('#tbClose').addEventListener('click', () => window.spartacus.close());
@@ -833,3 +979,14 @@ document.addEventListener('keydown', (e) => {
 Timer.render();
 renderSounds();
 Player.render();
+
+// Smoke hook: exercise alarm + notification + taskbar flash without waiting.
+if (window.spartacus.smoke) {
+  setTimeout(() => {
+    Engine.alarm();
+    window.spartacus.notify('SPARTACUS', 'Smoke test \u2014 focus complete.');
+    window.spartacus.flash(true);
+    setTimeout(() => window.spartacus.flash(false), 3000);
+    console.log('[smoke] alarm + notify + flash fired');
+  }, 2500);
+}

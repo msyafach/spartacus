@@ -16,6 +16,11 @@
     "appId": "com.spartacus.focus",
     "productName": "Spartacus",
     "artifactName": "Spartacus-Setup-${version}.exe",
+    "publish": {
+      "provider": "github",
+      "owner": "your-github-username",
+      "repo": "spartacus"
+    },
     "directories": {
       "output": "dist"
     },
@@ -57,5 +62,8 @@
   "devDependencies": {
     "electron": "^43.4.0",
     "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   }
 }

@@ -1,10 +1,11 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, protocol, session, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, protocol, session, shell, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const { Readable } = require('stream');
+const { autoUpdater } = require('electron-updater');
 
 app.setName('Spartacus');
 app.setAppUserModelId('com.spartacus.focus');
@@ -329,6 +330,7 @@ function createWindow() {
   });
 
   mainWindow.on('closed', () => { mainWindow = null; });
+  mainWindow.on('focus', () => { mainWindow.flashFrame(false); });
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
   mainWindow.on('maximize', () => mainWindow.webContents.send('win:maximized', true));
@@ -403,6 +405,51 @@ ipcMain.on('win:toggle-maximize', () => {
 ipcMain.on('win:close', () => mainWindow && mainWindow.close());
 ipcMain.handle('win:isMaximized', () => mainWindow && mainWindow.isMaximized());
 
+ipcMain.on('win:flash', (_e, on) => {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.flashFrame(!!on);
+});
+ipcMain.on('notify', (_e, { title, body }) => {
+  new Notification({ title: title || 'Spartacus', body: body || '' }).show();
+});
+ipcMain.handle('app:version', () => app.getVersion());
+
+/* ---------- updates (electron-updater, packaged builds only) ---------- */
+
+let updateReady = false;
+
+function sendUpdateStatus(status) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update:status', status);
+}
+
+function setupUpdater() {
+  if (!app.isPackaged) return;
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on('update-available', () => sendUpdateStatus({ state: 'downloading' }));
+  autoUpdater.on('update-not-available', () => sendUpdateStatus({ state: 'none' }));
+  autoUpdater.on('update-downloaded', (info) => {
+    updateReady = true;
+    sendUpdateStatus({ state: 'ready', version: info && info.version });
+    new Notification({
+      title: 'Spartacus update ready',
+      body: 'Restart the app to install it.',
+    }).show();
+  });
+  autoUpdater.on('error', (err) => sendUpdateStatus({ state: 'error', message: err && err.message }));
+  // Quiet background check shortly after launch; failures are non-fatal.
+  setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 6000);
+}
+
+ipcMain.on('updates:check', () => {
+  if (!app.isPackaged) return;
+  sendUpdateStatus({ state: 'checking' });
+  autoUpdater.checkForUpdates().catch((e) => sendUpdateStatus({ state: 'error', message: e.message }));
+});
+ipcMain.on('updates:install', () => {
+  if (updateReady) autoUpdater.quitAndInstall();
+});
+ipcMain.handle('updates:supported', () => app.isPackaged);
+
 /* ---------- lifecycle ---------- */
 
 app.whenReady().then(() => {
@@ -410,6 +457,7 @@ app.whenReady().then(() => {
   cleanupCache();
   session.defaultSession.setSpellCheckerEnabled(false);
   protocol.handle('spartacus', handleAudioRequest);
+  setupUpdater();
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

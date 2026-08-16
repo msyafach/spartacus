@@ -5,6 +5,9 @@ A minimalist **black & white** Windows desktop app to help you focus. Built with
 ## Features
 
 - **Pomodoro timer** — focus / short break / long break, session dots, chime on completion, custom durations and rounds per cycle.
+- **Focus-complete alarm** — gentle bell arpeggio (C5-E5-G5-C6) + warm pad, repeated 3×; plus a
+  native Windows notification and taskbar flash. Both can be toggled in Settings.
+  Breaks end with a soft two-note chime. Starting the next session stops the alarm.
 - **Ambient soundscapes** — generated live with the Web Audio API (no audio files, no internet needed):
   - Rain, Ocean, Bustling Café, Airplane Cabin, Brown Noise
   - Binaural Beta (20 Hz) and Binaural Gamma (40 Hz) — best with headphones
@@ -34,6 +37,38 @@ npm run dist
 Output: `dist/Spartacus Setup <version>.exe` (NSIS installer).
 
 ## Notes
+
+### Where extracted YouTube music is stored
+
+Audio is extracted once and cached on disk — replaying a track costs nothing:
+
+- Location: `%APPDATA%\Spartacus\audio-cache`
+- Files are named `<videoId>.<ext>` (webm/opus or m4a) — **audio only, never video**
+- Capped at ~400 MB; the oldest files are removed automatically when the cap is reached
+- Removing a track from the queue also deletes its cached file
+- Settings, queue and volumes live in the same `%APPDATA%\Spartacus` folder (localStorage)
+
+### Running the installer when the app is already installed
+
+The wizard handles it cleanly:
+
+- It detects the existing installation, silently removes the old version first, then installs —
+  the registry entry and shortcuts are **updated in place** (never duplicated)
+- If Spartacus is running, the installer asks you to close it first
+- Your data (`%APPDATA%\Spartacus`) is **never touched** — settings, queue and cache survive
+  reinstalls and uninstalls
+- Uninstalling (from Settings → Apps, or `Uninstall Spartacus.exe`) removes the app but keeps
+  your data on purpose, so reinstalling picks up right where you left off
+
+### Updates
+
+The app uses `electron-updater` with GitHub Releases:
+
+- On launch it quietly checks for updates and downloads them in the background
+- When an update is ready you get a notification; restart to install (or use
+  Settings → Check for updates → Restart & install)
+- To enable publishing, set your repo in `package.json` (`build.publish`) and release with:
+  `GH_TOKEN=<github-token> npm run dist` then `npx electron-builder --publish always`
 
 - YouTube playback requires an internet connection; ambient sounds do not.
 - On first play a track is downloaded (a few seconds) — afterwards it plays instantly from cache.

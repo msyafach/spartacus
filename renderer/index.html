@@ -96,6 +96,18 @@
       <div class="field"><label for="setShort">Short break</label><input type="number" id="setShort" min="1" max="60" /></div>
       <div class="field"><label for="setLong">Long break</label><input type="number" id="setLong" min="1" max="120" /></div>
       <div class="field"><label for="setSessions">Rounds / cycle</label><input type="number" id="setSessions" min="1" max="12" /></div>
+      <div class="field"><label for="setAlarm">Alarm on focus end</label><input type="checkbox" id="setAlarm" class="switch" /></div>
+      <div class="field"><label for="setNotify">Notifications</label><input type="checkbox" id="setNotify" class="switch" /></div>
+      <div class="update-section">
+        <div class="update-info">
+          <span class="update-version" id="updateVersion">VERSION</span>
+          <span class="update-status" id="updateStatus"></span>
+        </div>
+        <div class="update-actions">
+          <button class="btn small" id="updateCheckBtn">CHECK FOR UPDATES</button>
+          <button class="btn small primary hidden" id="updateInstallBtn">RESTART &amp; INSTALL</button>
+        </div>
+      </div>
       <div class="actions">
         <button class="btn" id="settingsCancel">CANCEL</button>
         <button class="btn primary" id="settingsSave">SAVE</button>
