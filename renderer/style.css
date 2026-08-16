@@ -34,7 +34,6 @@ input, textarea { user-select: text; }
   inset: -4px;
   z-index: 0;
   background: url(../assets/background.jpg) center / cover no-repeat;
-  filter: grayscale(1) contrast(1.08) brightness(0.78);
 }
 
 /* Second layer for crossfading between per-track backgrounds. */
