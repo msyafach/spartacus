@@ -554,17 +554,9 @@ const Timer = (() => {
 
   function setMode(m) {
     if (m === mode) return;
-    if (running) {
-      // Switching tabs while a run is active pauses that run cleanly and
-      // keeps its position, so the button shows START for the new tab and
-      // the run can never bleed into another tab's display.
-      const left = Math.max(0, Math.round((endAt - Date.now()) / 1000));
-      remainingByMode[activeMode] = left;
-      running = false;
-      activeMode = null;
-      clearInterval(intervalId);
-    }
-    remainingByMode[mode] = remaining; // remember this tab's position
+    // Switching tabs never stops or resets anything. The active run keeps
+    // ticking in the background; this tab just shows its own remaining time.
+    remainingByMode[mode] = remaining;
     mode = m;
     remaining = remainingByMode[m];
     render();
@@ -656,7 +648,7 @@ const Timer = (() => {
     $('#timeDisplay').textContent = fmtTime(remaining);
     $('#modeLabel').textContent = MODES[mode];
     $('#ringProgress').style.strokeDashoffset = String(RING_C * (1 - frac));
-    $('#startPauseBtn').textContent = running ? 'PAUSE' : 'START';
+    $('#startPauseBtn').textContent = running && activeMode === mode ? 'PAUSE' : 'START';
     $$('.mode-tab').forEach((t) => t.classList.toggle('active', t.dataset.mode === mode));
 
     // Mini-mode widget mirrors the same state.
@@ -679,7 +671,7 @@ const Timer = (() => {
     document.title = running ? `${fmtTime(remaining)} \u00b7 ${MODES[mode]} \u2014 SPARTACUS` : 'SPARTACUS';
   }
 
-  return { render, start, pause, toggle: () => (running ? pause() : start()), reset, skip, setMode, applySettings };
+  return { render, start, pause, toggle: () => (running && activeMode === mode ? pause() : start()), reset, skip, setMode, applySettings };
 })();
 
 /* ================= youtube audio player ================= */
@@ -1416,26 +1408,31 @@ if (window.spartacus.smoke) {
     }, 2200);
   }, 14000);
   setTimeout(() => {
-    // Switch-pause: running focus + switching to break pauses focus,
-    // the button shows START, and starting break runs break's own time.
+    // Keep-running: switching tabs must NOT stop the active run.
+    // Starting on another tab moves the run to that tab, preserving the old one.
+    Timer.reset();
     Timer.setMode('focus');
     Timer.toggle(); // start focus
     setTimeout(() => {
-      Timer.setMode('short'); // must pause the focus run
-      const b1 = document.getElementById('timeDisplay').textContent;
+      Timer.setMode('short'); // focus must keep running
       const btn = document.getElementById('startPauseBtn').textContent;
-      Timer.toggle(); // start break
+      const b1 = document.getElementById('timeDisplay').textContent; // break's own memory, static
       setTimeout(() => {
-        const b2 = document.getElementById('timeDisplay').textContent;
         Timer.setMode('focus');
-        const f2 = document.getElementById('timeDisplay').textContent;
-        // b1 = break's own memory (kept from earlier tests), b2 must tick down
-        // from it, and focus must still hold its own position (~24:5x).
-        const ok = btn === 'START' && b2 < b1 && f2.startsWith('24:');
-        console.log('[smoke] switch-pause | break memory:', b1, '| button:', btn,
-          '| break ticking:', b2, '| focus preserved:', f2, '|', ok ? 'OK' : 'FAIL');
-        Timer.reset();
-      }, 1500);
+        const f1 = document.getElementById('timeDisplay').textContent; // focus still ticking
+        Timer.setMode('short');
+        Timer.toggle(); // move the run to break
+        setTimeout(() => {
+          const b2 = document.getElementById('timeDisplay').textContent; // break ticking from its memory
+          Timer.setMode('focus');
+          const f2 = document.getElementById('timeDisplay').textContent; // focus preserved, frozen
+          const ok = btn === 'START' && b2 < b1 && f1.startsWith('24:') && f2.startsWith('24:');
+          console.log('[smoke] keep-running | button on break:', btn, '| break memory:', b1,
+            '| focus still ticking:', f1, '| break ticking:', b2, '| focus preserved:', f2,
+            '|', ok ? 'OK' : 'FAIL');
+          Timer.reset();
+        }, 1500);
+      }, 2000);
     }, 1500);
   }, 19000);
 }

@@ -1,7 +1,7 @@
 {
   "name": "spartacus",
   "productName": "Spartacus",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Minimalist black & white focus companion: Pomodoro timer, generative ambient soundscapes, and YouTube audio-only music.",
   "main": "main.js",
   "author": {
@@ -33,7 +33,8 @@
       "package.json"
     ],
     "asarUnpack": [
-      "bin/yt-dlp.exe"
+      "bin/yt-dlp.exe",
+      "assets/icon.ico"
     ],
     "win": {
       "target": [

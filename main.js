@@ -41,6 +41,11 @@ protocol.registerSchemesAsPrivileged([
 const YTDLP = app.isPackaged
   ? path.join(process.resourcesPath, 'app.asar.unpacked', 'bin', 'yt-dlp.exe')
   : path.join(__dirname, 'bin', 'yt-dlp.exe');
+// The window icon must live on a real filesystem path (Windows cannot read
+// it from inside app.asar), so it is unpacked in packaged builds.
+const APP_ICON = app.isPackaged
+  ? path.join(process.resourcesPath, 'app.asar.unpacked', 'assets', 'icon.ico')
+  : path.join(__dirname, 'assets', 'icon.ico');
 const CACHE_DIR = path.join(app.getPath('userData'), 'audio-cache');
 const CACHE_LIMIT = 400 * 1024 * 1024;
 
@@ -378,10 +383,9 @@ function createWindow() {
     frame: false,
     show: false,
     backgroundColor: '#000000',
-    // nativeImage.createFromPath can read from inside app.asar, unlike the
-    // plain icon path option (which silently fell back to Electron's icon
-    // on the taskbar in packaged builds).
-    icon: nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon.ico')),
+    // Real filesystem path (unpacked in packaged builds) so the native
+    // icon loader can always read it for the taskbar.
+    icon: nativeImage.createFromPath(APP_ICON),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
