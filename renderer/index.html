@@ -15,10 +15,19 @@
     <div class="brand"><span class="brand-mark"></span><span>SPARTACUS</span></div>
     <div class="spacer"></div>
     <button class="tb-btn tb-settings" id="btnSettings">SETTINGS</button>
-    <button class="tb-btn" id="tbMin" title="Minimize">&#9472;</button>
+    <button class="tb-btn" id="tbExpand" title="Restore">&#10562;</button>
+    <button class="tb-btn" id="tbMin" title="Mini mode">&#9472;</button>
     <button class="tb-btn" id="tbMax" title="Maximize">&#9633;</button>
     <button class="tb-btn tb-close" id="tbClose" title="Close">&#10005;</button>
   </header>
+
+  <div class="mini-bar" id="miniBar" title="Click to restore">
+    <div class="mini-row">
+      <span class="mini-label" id="miniLabel">FOCUS</span>
+      <span class="mini-time" id="miniTime">25:00</span>
+    </div>
+    <div class="mini-progress"><div class="mini-progress-fill" id="miniProgressFill"></div></div>
+  </div>
 
   <main>
     <section class="pane timer-pane">

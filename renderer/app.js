@@ -616,6 +616,11 @@ const Timer = (() => {
     $('#startPauseBtn').textContent = running ? 'PAUSE' : 'START';
     $$('.mode-tab').forEach((t) => t.classList.toggle('active', t.dataset.mode === mode));
 
+    // Mini-mode widget mirrors the same state.
+    $('#miniTime').textContent = fmtTime(remaining);
+    $('#miniLabel').textContent = MODES[mode];
+    $('#miniProgressFill').style.width = (frac * 100).toFixed(1) + '%';
+
     let filled = completed % settings.sessions;
     if (completed > 0 && filled === 0 && mode !== 'focus') filled = settings.sessions;
 
@@ -929,6 +934,26 @@ function saveSettings() {
   toast('Settings saved.');
 }
 
+/* ================= mini mode ================= */
+
+let miniMode = false;
+
+function enterMini() {
+  if (miniMode) return;
+  miniMode = true;
+  document.body.classList.add('mini-mode');
+  window.spartacus.setMiniMode(true);
+  Timer.render(); // refresh the widget immediately
+}
+
+function exitMini() {
+  if (!miniMode) return;
+  miniMode = false;
+  document.body.classList.remove('mini-mode');
+  window.spartacus.setMiniMode(false);
+  Timer.render();
+}
+
 /* ================= wiring ================= */
 
 $('#startPauseBtn').addEventListener('click', () => Timer.toggle());
@@ -960,13 +985,16 @@ $('#updateCheckBtn').addEventListener('click', () => {
 });
 $('#updateInstallBtn').addEventListener('click', () => window.spartacus.installUpdate());
 
-$('#tbMin').addEventListener('click', () => window.spartacus.minimize());
+$('#tbMin').addEventListener('click', enterMini);
+$('#tbExpand').addEventListener('click', exitMini);
+$('#miniBar').addEventListener('click', exitMini);
 $('#tbMax').addEventListener('click', () => window.spartacus.toggleMaximize());
 $('#tbClose').addEventListener('click', () => window.spartacus.close());
 window.spartacus.onMaximized((v) => { $('#tbMax').textContent = v ? '\u274f' : '\u25a1'; });
 window.spartacus.isMaximized().then((v) => { if (v) $('#tbMax').textContent = '\u274f'; });
 
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && miniMode) { exitMini(); return; }
   if (e.target.closest('input, textarea, button')) return;
   if ($('#settingsOverlay').classList.contains('open')) return;
   if (e.code === 'Space') { e.preventDefault(); Timer.toggle(); }
@@ -989,4 +1017,18 @@ if (window.spartacus.smoke) {
     setTimeout(() => window.spartacus.flash(false), 3000);
     console.log('[smoke] alarm + notify + flash fired');
   }, 2500);
+  setTimeout(() => {
+    enterMini();
+    const bar = document.getElementById('miniBar').getBoundingClientRect();
+    const title = document.querySelector('.titlebar').getBoundingClientRect();
+    const time = document.getElementById('miniTime').getBoundingClientRect();
+    console.log('[smoke] mini mode entered | titlebar bottom:', title.bottom.toFixed(0),
+      '| mini-bar top:', bar.top.toFixed(0),
+      '| time visible:', time.top >= title.bottom ? 'YES' : 'NO',
+      '| time text:', document.getElementById('miniTime').textContent);
+    setTimeout(() => {
+      exitMini();
+      console.log('[smoke] mini mode exited');
+    }, 1500);
+  }, 6000);
 }

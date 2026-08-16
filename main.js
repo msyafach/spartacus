@@ -408,6 +408,24 @@ ipcMain.handle('win:isMaximized', () => mainWindow && mainWindow.isMaximized());
 ipcMain.on('win:flash', (_e, on) => {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.flashFrame(!!on);
 });
+
+// Mini mode: the window shrinks into a tiny always-on-top countdown widget.
+ipcMain.on('win:mini-mode', (_e, on) => {
+  if (!mainWindow) return;
+  if (on) {
+    if (mainWindow.isMaximized()) mainWindow.unmaximize();
+    mainWindow.setMinimumSize(264, 108);
+    mainWindow.setMaximumSize(264, 108);
+    mainWindow.setSize(264, 108);
+    mainWindow.setAlwaysOnTop(true, 'floating');
+  } else {
+    mainWindow.setAlwaysOnTop(false);
+    mainWindow.setMaximumSize(10000, 10000);
+    mainWindow.setMinimumSize(960, 660);
+    mainWindow.setSize(1200, 800);
+  }
+  if (process.env.SMOKE_TEST) console.log('[smoke] mini-mode', on ? 'on' : 'off', JSON.stringify(mainWindow.getSize()));
+});
 ipcMain.on('notify', (_e, { title, body }) => {
   new Notification({ title: title || 'Spartacus', body: body || '' }).show();
 });

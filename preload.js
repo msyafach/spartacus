@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('spartacus', {
   isMaximized: () => ipcRenderer.invoke('win:isMaximized'),
   onMaximized: (cb) => ipcRenderer.on('win:maximized', (_e, v) => cb(v)),
   flash: (on) => ipcRenderer.send('win:flash', !!on),
+  setMiniMode: (on) => ipcRenderer.send('win:mini-mode', !!on),
   notify: (title, body) => ipcRenderer.send('notify', { title, body }),
   getVersion: () => ipcRenderer.invoke('app:version'),
   checkUpdates: () => ipcRenderer.send('updates:check'),
