@@ -319,7 +319,55 @@ function serveFile(file, request) {
   return new Response(Readable.toWeb(stream), { status: range ? 206 : 200, headers });
 }
 
-/* ---------- window ---------- */
+/* ---------- screenshot capture (README highlights) ---------- */
+
+async function runShots() {
+  const out = process.env.SHOTS_DIR;
+  try {
+    fs.mkdirSync(out, { recursive: true });
+    const wc = mainWindow.webContents;
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const shot = async (name) => {
+      await sleep(700);
+      const img = await wc.capturePage();
+      fs.writeFileSync(path.join(out, name + '.png'), img.toPNG());
+      console.log('[shots]', name + '.png');
+    };
+
+    await sleep(2000); // let the quote fetch + layout settle
+    await wc.executeJavaScript(`(() => {
+      const v1 = Goals.add('vision', 'Build a calm, focused mind');
+      Goals.add('vision', 'Master deep work');
+      const y1 = Goals.add('year', 'Read 24 books');
+      Goals.add('year', 'Ship 3 side projects');
+      const q1 = Goals.add('quarter', 'Finish the design course');
+      Goals.add('quarter', 'Run 150 km');
+      const m1 = Goals.add('month', 'Meditate every morning');
+      const m2 = Goals.add('month', 'Complete 40 focus sessions');
+      Goals.toggle('year', y1);
+      Goals.toggle('quarter', q1);
+      Goals.toggle('month', m2);
+      void v1; void m1;
+      Player.setLofiVolume(0);
+      Player.playBuiltin(0);
+      Timer.toggle();
+      return true;
+    })()`);
+    await sleep(2600); // lofi starts + per-track background fades in
+
+    await shot('1-timer');
+    await wc.executeJavaScript('setView("goals")');
+    await shot('2-goals');
+    await wc.executeJavaScript('setView("timer"); openSettings()');
+    await shot('3-settings');
+    await wc.executeJavaScript('document.getElementById("settingsOverlay").classList.remove("open"); enterMini()');
+    await shot('4-mini');
+    console.log('[shots] done');
+  } catch (e) {
+    console.error('[shots] failed:', e);
+  }
+  app.quit();
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -351,6 +399,10 @@ function createWindow() {
     shell.openExternal(url);
     return { action: 'deny' };
   });
+
+  if (process.env.SHOTS_DIR) {
+    mainWindow.webContents.once('did-finish-load', runShots);
+  }
 
   if (process.env.SMOKE_TEST) {
     const logMemory = (tag) => {

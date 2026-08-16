@@ -1108,10 +1108,12 @@ const Goals = (() => {
 
   function add(kind, text) {
     text = text.trim();
-    if (!text) return;
-    listFor(kind).push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text, done: false });
+    if (!text) return null;
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    listFor(kind).push({ id, text, done: false });
     save();
     render();
+    return id;
   }
 
   function toggle(kind, id) {
