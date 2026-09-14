@@ -20,28 +20,28 @@ Spartacus keeps the things that help you focus close, and the things that distra
 
 - One calm window. The timer, your sounds, and your goals sit side by side. No feeds, no ads, no noise.
 - Sounds that support you. Ambient soundscapes and lofi music play without video, ads, or endless browsing. Paste a YouTube link and only the audio comes in.
-- Every session connects to something bigger. Your five year vision, this year's goals, this quarter, this month. All visible while you work.
+- Every session connects to something bigger. Link your five-year vision to three-year targets, then to this year's, this quarter's, and this month's goals. Review past periods whenever you need perspective.
 - It gets out of your way. Shrink the app into a tiny widget that floats above your other windows and shows the time left, so your screen stays yours.
 
 ## What
 
 ### Focus timer with a gentle alarm
 
-Work in 25 minute sessions with short breaks in between. The ring empties as time passes. When a session ends you get a soft bell melody, a notification, and the taskbar flashes. No harsh buzzer.
+Work in 25 minute sessions with short breaks in between. The ring empties as time passes. When a session ends you get a soft bell melody, a notification, and the taskbar flashes. No harsh buzzer. A running session is kept safe: close and reopen the app and it resumes with its accurate time left; if it ended while you were away, Spartacus calmly moves you to the next session.
 
 ### Goals from five years down to this month
 
-Keep your five year vision at the top, then break it down into yearly, quarterly, and monthly goals. Tick things off as you go. Past months are kept, so nothing you wrote gets lost.
+Keep your five-year vision at the top, then turn it into three-year targets, yearly, quarterly, and monthly goals. Optionally link each level to its parent, so a monthly action stays connected to the bigger reason behind it. Tick things off as you go, browse past months, quarters, and years whenever you need a review, and undo an accidental goal deletion for six seconds.
 
 ![Goals view](screenshots/2-goals.png)
 
 ### Ambient soundscapes
 
-Rain, ocean, a bustling cafe, an airplane cabin, brown noise, and binaural beats. Every sound is generated live, works offline, and can be layered with others. Each one has its own volume.
+Rain, ocean, forest, fireplace, a bustling café, an airplane cabin, brown noise, and binaural beats. Real field recordings and generated sounds work offline, can be layered together, and each have their own volume. [Ambience recording credits](docs/AMBIENCE_SOURCES.md).
 
 ### Built-in lofi with its own backdrop
 
-Nine lofi tracks come with the app, no internet needed. Each track has its own background photo that fades in when the track starts playing.
+Fifteen lofi tracks come with the app, no internet needed. Search by song or artist, see what is playing, and jump to another moment with the playback timeline. The background artwork fades to match the mood of each track. [New track credits and licenses](docs/MUSIC_SOURCES.md).
 
 ### Your YouTube music, audio only
 
@@ -69,17 +69,18 @@ Adjust session lengths, alarm, notifications, and updates from one place.
 2. Open it and pick a folder. No admin rights needed.
 3. Start Spartacus from your Start Menu or desktop.
 
-Installing over an older version works fine. Your goals, queue, and settings are kept. Uninstalling keeps them too, in case you come back.
+Installing over an older version works fine. Your goals, timer state, queue, and settings are kept locally. Uninstalling keeps them too, in case you come back.
 
 Updates arrive automatically. When a new version is ready you get a notification, and it installs when you restart. You can also check manually in Settings.
 
 ## Notes
 
 - Your YouTube tracks are kept in a small cache folder, so replaying them is instant. It is capped at about 400 MB and old tracks are cleared automatically.
-- Keyboard shortcuts: `Space` start or pause the timer, `R` reset, `S` skip, `Esc` leave mini mode.
-- Built-in music: MISE (Blurred Memories, public domain), plus Lukrembo, Kalaido, Kerusu, and Matt Quentin (royalty free, credited here).
-- Background photos from Unsplash (free license).
-- App icon: Spartan helmet by Delapouite from game-icons.net (CC BY 3.0).
+- Goal history is read-only, keeping past plans available for review without accidentally changing them.
+- Keyboard shortcuts: `Space` start or pause the timer, `R` reset, `S` skip, `Esc` leave mini mode. While a session runs, pause or skip it before choosing another timer mode so every control stays with the visible session.
+- Built-in music: HoliznaCC0 (CC0), MISE (Blurred Memories, public domain), plus Lukrembo, Kalaido, Kerusu, and Matt Quentin (royalty free, credited here).
+- Background artwork was generated for Spartacus.
+- App icon and installer artwork use an original Spartacus helmet mark.
 
 ## Building from source
 

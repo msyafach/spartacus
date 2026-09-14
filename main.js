@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, protocol, session, shell, Notification, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, protocol, session, shell, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
@@ -8,8 +8,9 @@ const { spawn } = require('child_process');
 const { Readable } = require('stream');
 const { autoUpdater } = require('electron-updater');
 
+const APP_ID = 'com.spartacus.focus'; // Must match build.appId / installer shortcuts.
 app.setName('Spartacus');
-app.setAppUserModelId('com.spartacus.focus');
+app.setAppUserModelId(APP_ID);
 
 // Single instance: launching the app again focuses the existing window
 // instead of opening a second one.
@@ -343,12 +344,14 @@ async function runShots() {
     await wc.executeJavaScript(`(() => {
       const v1 = Goals.add('vision', 'Build a calm, focused mind');
       Goals.add('vision', 'Master deep work');
-      const y1 = Goals.add('year', 'Read 24 books');
-      Goals.add('year', 'Ship 3 side projects');
-      const q1 = Goals.add('quarter', 'Finish the design course');
-      Goals.add('quarter', 'Run 150 km');
-      const m1 = Goals.add('month', 'Meditate every morning');
-      const m2 = Goals.add('month', 'Complete 40 focus sessions');
+      const t1 = Goals.add('threeYear', 'Build a sustainable independent career', v1);
+      const y1 = Goals.add('year', 'Read 24 books', t1);
+      Goals.add('year', 'Ship 3 side projects', t1);
+      const q1 = Goals.add('quarter', 'Finish the design course', y1);
+      Goals.add('quarter', 'Run 150 km', y1);
+      const m1 = Goals.add('month', 'Meditate every morning', q1);
+      const m2 = Goals.add('month', 'Complete 40 focus sessions', q1);
+      Goals.toggle('threeYear', t1);
       Goals.toggle('year', y1);
       Goals.toggle('quarter', q1);
       Goals.toggle('month', m2);
@@ -361,12 +364,55 @@ async function runShots() {
     await sleep(2600); // lofi starts + per-track background fades in
 
     await shot('1-timer');
-    await wc.executeJavaScript('setView("goals")');
+    await shot('promo-01-timer');
+
+    await wc.executeJavaScript('setView("goals"); document.getElementById("goalsView").scrollTop = 0');
     await shot('2-goals');
-    await wc.executeJavaScript('setView("timer"); openSettings()');
+    await shot('promo-02-goals');
+
+    await wc.executeJavaScript(`(() => {
+      const pastYear = new Date().getFullYear() - 1;
+      Goals.add('month', 'Review 24 focus sessions', '', new Date(pastYear, 0, 15));
+      const history = document.querySelector('.goal-history');
+      history.open = true;
+      document.getElementById('historyKind').value = 'month';
+      document.getElementById('historyKind').dispatchEvent(new Event('change'));
+      document.getElementById('historyKey').value = pastYear + '-01';
+      document.getElementById('historyKey').dispatchEvent(new Event('change'));
+      document.getElementById('goalsView').scrollTop = document.getElementById('goalsView').scrollHeight;
+    })()`);
+    await shot('promo-05-goals-history');
+
+    await wc.executeJavaScript(`(() => {
+      setView('timer');
+      const pane = document.querySelector('.right-pane');
+      pane.scrollTop = 0;
+      Engine.startSound('rain');
+      Engine.startSound('ocean');
+      renderSounds();
+    })()`);
+    await shot('promo-03-ambience');
+
+    await wc.executeJavaScript(`(() => {
+      const pane = document.querySelector('.right-pane');
+      pane.scrollTop = document.querySelector('.builtin-card').offsetTop - 20;
+    })()`);
+    await shot('promo-04-lofi');
+
+    await wc.executeJavaScript(`(() => {
+      const pane = document.querySelector('.right-pane');
+      pane.scrollTop = document.querySelector('.music-card').offsetTop - 20;
+      document.getElementById('ytInput').value = 'https://youtu.be/dQw4w9WgXcQ';
+    })()`);
+    await shot('promo-06-youtube');
+
+    await wc.executeJavaScript('openSettings()');
     await shot('3-settings');
+    await shot('promo-08-settings');
+
     await wc.executeJavaScript('document.getElementById("settingsOverlay").classList.remove("open"); enterMini()');
     await shot('4-mini');
+    await shot('promo-07-mini');
     console.log('[shots] done');
   } catch (e) {
     console.error('[shots] failed:', e);
@@ -383,9 +429,8 @@ function createWindow() {
     frame: false,
     show: false,
     backgroundColor: '#000000',
-    // Real filesystem path (unpacked in packaged builds) so the native
-    // icon loader can always read it for the taskbar.
-    icon: nativeImage.createFromPath(APP_ICON),
+    // Pass the ICO path directly so Windows can select the native icon size.
+    icon: APP_ICON,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -395,6 +440,19 @@ function createWindow() {
       backgroundThrottling: true,
     },
   });
+
+  if (process.platform === 'win32' && app.isPackaged) {
+    // The taskbar's grouped/pinned icon is separate from the window icon.
+    // Set all relaunch properties before showing the window so Explorer uses
+    // this installation's icon and executable, not stale shortcut metadata.
+    mainWindow.setAppDetails({
+      appId: APP_ID,
+      appIconPath: APP_ICON,
+      appIconIndex: 0,
+      relaunchCommand: `"${process.execPath}"`,
+      relaunchDisplayName: app.getName(),
+    });
+  }
 
   mainWindow.on('closed', () => { mainWindow = null; });
   mainWindow.on('focus', () => { mainWindow.flashFrame(false); });

@@ -1,8 +1,8 @@
 {
   "name": "spartacus",
   "productName": "Spartacus",
-  "version": "1.0.4",
-  "description": "Minimalist black & white focus companion: Pomodoro timer, generative ambient soundscapes, and YouTube audio-only music.",
+  "version": "1.0.5",
+  "description": "Minimalist black & white focus companion: Pomodoro timer, layered ambient soundscapes, and YouTube audio-only music.",
   "main": "main.js",
   "author": {
     "name": "Spartacus"
@@ -10,6 +10,7 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
+    "test:windows-icon": "node tools/test-windows-icon.cjs",
     "dist": "electron-builder --win"
   },
   "build": {
@@ -43,6 +44,7 @@
       "icon": "assets/icon.ico"
     },
     "nsis": {
+      "include": "build/installer.nsh",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,

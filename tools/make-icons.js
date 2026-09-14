@@ -1,10 +1,10 @@
 'use strict';
-// Identity generator: renders assets/helmet.svg (Spartan helmet by Delapouite,
-// game-icons.net, CC BY 3.0) as the app icon and installer artwork.
+// Identity generator: renders the project-owned helmet mark as the app icon
+// and uses it consistently across the Windows installer artwork.
 // Run: npx electron tools/make-icons.js
 // Outputs:
 //   assets/icon.png                    512px preview
-//   assets/icon.ico                    256/48/32/16 (PNG-compressed entries)
+//   assets/icon.ico                    256/128/64/48/32/16 (PNG-compressed entries)
 //   assets/installer-sidebar.bmp       164x314 wizard sidebar
 //   assets/installer-header.bmp        150x57 wizard header
 
@@ -152,7 +152,7 @@ app.whenReady().then(async () => {
     const img = new Image();
     img.src = ${JSON.stringify(DATA_URL)};
     await img.decode();
-    const pad = ${'${s}'} * 0.18;
+    const pad = ${'${s}'} * 0.13;
     ctx.drawImage(img, pad, pad, ${'${s}'} - pad * 2, ${'${s}'} - pad * 2);
     return ctx.getImageData(0, 0, ${'${s}'}, ${'${s}'}).data;
   `.split('${s}').join(size));
@@ -161,32 +161,37 @@ app.whenReady().then(async () => {
     const c = document.createElement('canvas');
     c.width = 164; c.height = 314;
     const ctx = c.getContext('2d');
-    ctx.fillStyle = '#000';
+    ctx.fillStyle = '#080808';
     ctx.fillRect(0, 0, 164, 314);
-    ctx.strokeStyle = '#5a5a5a';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(14, 14, 136, 286);
+    ctx.strokeStyle = '#626262';
     ctx.lineWidth = 1;
-    ctx.strokeRect(22, 22, 120, 270);
+    ctx.strokeRect(12.5, 12.5, 139, 289);
+    ctx.strokeStyle = '#343434';
+    ctx.strokeRect(18.5, 18.5, 127, 277);
+    const light = ctx.createLinearGradient(0, 24, 164, 204);
+    light.addColorStop(0, '#161616');
+    light.addColorStop(1, '#080808');
+    ctx.fillStyle = light;
+    ctx.fillRect(20, 20, 124, 272);
     const img = new Image();
     img.src = ${JSON.stringify(DATA_URL)};
     await img.decode();
-    ctx.drawImage(img, 50, 94, 64, 64);
+    ctx.drawImage(img, 34, 55, 96, 96);
     ctx.fillStyle = '#fff';
-    ctx.font = '600 19px "Segoe UI", sans-serif';
-    ctx.letterSpacing = '8px';
+    ctx.font = '600 12px "Segoe UI", sans-serif';
+    ctx.letterSpacing = '2.1px';
     ctx.textAlign = 'center';
-    ctx.fillText('SPARTACUS', 82, 208);
-    ctx.strokeStyle = '#5a5a5a';
+    ctx.fillText('SPARTACUS', 82, 200, 132);
+    ctx.strokeStyle = '#686868';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(22, 222);
-    ctx.lineTo(142, 222);
+    ctx.moveTo(35, 218.5);
+    ctx.lineTo(129, 218.5);
     ctx.stroke();
-    ctx.fillStyle = '#5a5a5a';
-    ctx.font = '600 11px "Segoe UI", sans-serif';
-    ctx.letterSpacing = '6px';
-    ctx.fillText('FOCUS', 82, 246);
+    ctx.fillStyle = '#aaa';
+    ctx.font = '500 10px "Segoe UI", sans-serif';
+    ctx.letterSpacing = '3px';
+    ctx.fillText('FOCUS', 82, 242);
     return ctx.getImageData(0, 0, 164, 314).data;
   `);
 
@@ -194,24 +199,28 @@ app.whenReady().then(async () => {
     const c = document.createElement('canvas');
     c.width = 150; c.height = 57;
     const ctx = c.getContext('2d');
-    ctx.fillStyle = '#000';
+    ctx.fillStyle = '#080808';
     ctx.fillRect(0, 0, 150, 57);
+    const img = new Image();
+    img.src = ${JSON.stringify(DATA_URL)};
+    await img.decode();
+    ctx.drawImage(img, 12, 10, 36, 36);
     ctx.fillStyle = '#fff';
-    ctx.font = '600 20px "Segoe UI", sans-serif';
-    ctx.letterSpacing = '8px';
-    ctx.textAlign = 'center';
-    ctx.fillText('SPARTACUS', 75, 34);
+    ctx.font = '600 11px "Segoe UI", sans-serif';
+    ctx.letterSpacing = '1.2px';
+    ctx.textAlign = 'left';
+    ctx.fillText('SPARTACUS', 52, 31, 90);
     ctx.strokeStyle = '#5a5a5a';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(15, 46);
-    ctx.lineTo(135, 46);
+    ctx.moveTo(52, 38.5);
+    ctx.lineTo(140, 38.5);
     ctx.stroke();
     return ctx.getImageData(0, 0, 150, 57).data;
   `);
 
   const preview = await renderIcon(512);
-  const icoSizes = [256, 48, 32, 16];
+  const icoSizes = [256, 128, 64, 48, 32, 16];
   const icoPngs = [];
   for (const s of icoSizes) icoPngs.push({ size: s, data: rgbaToPng(s, await renderIcon(s)) });
   const ico = pngToIco(icoPngs);

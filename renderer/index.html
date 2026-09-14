@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src spartacus:; connect-src 'none'; object-src 'none'; base-uri 'none'" />
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' spartacus:; connect-src 'none'; object-src 'none'; base-uri 'none'" />
   <title>SPARTACUS</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -83,10 +83,20 @@
           </div>
         </div>
         <div class="goal-card">
+          <div class="goal-head"><h3>3 YEARS</h3><span class="goal-count" id="threeYearCount">0/0</span></div>
+          <ul class="goal-list" id="threeYearList"></ul>
+          <div class="goal-add">
+            <input type="text" id="threeYearInput" placeholder="ADD A 3-YEAR TARGET" spellcheck="false" />
+            <select class="goal-parent" id="threeYearParent" aria-label="Link to a five-year vision"></select>
+            <button class="btn small" id="threeYearAddBtn">ADD</button>
+          </div>
+        </div>
+        <div class="goal-card">
           <div class="goal-head"><h3 id="yearLabel">THIS YEAR</h3><span class="goal-count" id="yearCount">0/0</span></div>
           <ul class="goal-list" id="yearList"></ul>
           <div class="goal-add">
             <input type="text" id="yearInput" placeholder="ADD A YEARLY GOAL" spellcheck="false" />
+            <select class="goal-parent" id="yearParent" aria-label="Link to a three-year target"></select>
             <button class="btn small" id="yearAddBtn">ADD</button>
           </div>
         </div>
@@ -95,6 +105,7 @@
           <ul class="goal-list" id="quarterList"></ul>
           <div class="goal-add">
             <input type="text" id="quarterInput" placeholder="ADD A QUARTERLY GOAL" spellcheck="false" />
+            <select class="goal-parent" id="quarterParent" aria-label="Link to a yearly goal"></select>
             <button class="btn small" id="quarterAddBtn">ADD</button>
           </div>
         </div>
@@ -103,9 +114,22 @@
           <ul class="goal-list" id="monthList"></ul>
           <div class="goal-add">
             <input type="text" id="monthInput" placeholder="ADD A MONTHLY GOAL" spellcheck="false" />
+            <select class="goal-parent" id="monthParent" aria-label="Link to a quarterly goal"></select>
             <button class="btn small" id="monthAddBtn">ADD</button>
           </div>
         </div>
+        <details class="goal-history">
+          <summary>VIEW PAST GOALS</summary>
+          <div class="history-controls">
+            <select id="historyKind" aria-label="Goal period type">
+              <option value="month">MONTH</option>
+              <option value="quarter">QUARTER</option>
+              <option value="year">YEAR</option>
+            </select>
+            <select id="historyKey" aria-label="Past goal period"></select>
+          </div>
+          <ul class="goal-list" id="historyList"></ul>
+        </details>
       </div>
     </section>
 
@@ -121,23 +145,8 @@
         <div class="sound-grid" id="soundGrid"></div>
       </div>
 
-      <div class="card builtin-card">
-        <div class="card-head">
-          <h2>BUILT-IN LOFI</h2>
-          <div class="master-vol">
-            <span>VOL</span>
-            <input type="range" id="builtinVol" min="0" max="100" />
-          </div>
-        </div>
-        <ul class="queue" id="builtinList"></ul>
-      </div>
-
-      <div class="card music-card">
-        <div class="card-head"><h2>MUSIC &middot; YOUTUBE AUDIO</h2></div>
-        <div class="yt-form">
-          <input type="text" id="ytInput" placeholder="PASTE A YOUTUBE LINK &#8212; AUDIO ONLY" spellcheck="false" />
-          <button class="btn small" id="ytAddBtn">ADD</button>
-        </div>
+      <div class="card player-card">
+        <div class="card-head"><h2>NOW PLAYING</h2><span class="player-source" id="playerSource">LOFI / YOUTUBE</span></div>
         <div class="player">
           <div class="player-btns">
             <button class="icon-btn" id="prevBtn" title="Previous">&#171;</button>
@@ -146,12 +155,40 @@
           </div>
           <div class="now-playing">
             <div class="np-title" id="npTitle">NOTHING PLAYING</div>
-            <div class="np-meta" id="npMeta">ADD A YOUTUBE LINK ABOVE</div>
+            <div class="np-meta" id="npMeta">PICK A LOFI TRACK OR ADD A YOUTUBE LINK</div>
           </div>
           <div class="player-vol">
             <span>VOL</span>
             <input type="range" id="musicVol" min="0" max="100" />
           </div>
+        </div>
+        <div class="play-timeline">
+          <span id="playElapsed">0:00</span>
+          <input type="range" id="playProgress" min="0" max="1000" value="0" aria-label="Seek within track" />
+          <span id="playDuration">0:00</span>
+        </div>
+      </div>
+
+      <div class="card builtin-card">
+        <div class="card-head">
+          <h2>BUILT-IN LOFI</h2>
+          <div class="master-vol">
+            <span>VOL</span>
+            <input type="range" id="builtinVol" min="0" max="100" />
+          </div>
+        </div>
+        <div class="lofi-tools">
+          <span class="lofi-count" id="builtinCount">0 TRACKS</span>
+          <input type="search" id="builtinSearch" placeholder="FIND A TRACK OR ARTIST" aria-label="Search built-in lofi" spellcheck="false" />
+        </div>
+        <ul class="queue lofi-list" id="builtinList"></ul>
+      </div>
+
+      <div class="card music-card">
+        <div class="card-head"><h2>MUSIC &middot; YOUTUBE AUDIO</h2></div>
+        <div class="yt-form">
+          <input type="text" id="ytInput" placeholder="PASTE A YOUTUBE LINK &#8212; AUDIO ONLY" spellcheck="false" />
+          <button class="btn small" id="ytAddBtn">ADD</button>
         </div>
         <ul class="queue" id="queueList"></ul>
       </div>
@@ -178,9 +215,10 @@
         </div>
       </div>
       <div class="credits">
-        BUILT-IN MUSIC: MISE \u2014 BLURRED MEMORIES (CC0 / PUBLIC DOMAIN) \u00b7
-        LUKREMBO, KALAIDO, KERUSU, MATT QUENTIN (ROYALTY-FREE, USED WITH CREDIT) \u00b7
-        APP ICON: SPARTAN HELMET BY DELAPOUITE, GAME-ICONS.NET (CC BY 3.0)
+        BUILT-IN MUSIC: <a href="https://freemusicarchive.org/music/holiznacc0/public-domain-lofi/" target="_blank" rel="noopener noreferrer">HOLIZNACC0</a> (CC0), MISE &mdash; BLURRED MEMORIES (CC0 / PUBLIC DOMAIN) &middot;
+        LUKREMBO, KALAIDO, KERUSU, MATT QUENTIN (ROYALTY-FREE, USED WITH CREDIT) &middot;
+        AMBIENCE: PUBLIC DOMAIN / CC0 RECORDINGS; <a href="https://commons.wikimedia.org/wiki/File:Campfire_sound_ambience.ogg" target="_blank" rel="noopener noreferrer">CAMPFIRE SOUND AMBIENCE BY GLANEUR DE SONS</a> (<a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener noreferrer">CC BY 3.0</a>, TRIMMED / FILTERED / COMPRESSED / CROSSFADED LOOP) &middot;
+        APP ICON: ORIGINAL SPARTACUS HELMET MARK
       </div>
       <div class="philosophy">
         NAMED AFTER SPARTACUS, THE GLADIATOR WHO FOUGHT FOR HIS FREEDOM.
@@ -193,7 +231,7 @@
     </div>
   </div>
 
-  <div class="toast" id="toast"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="app.js"></script>
 </body>

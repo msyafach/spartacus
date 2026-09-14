@@ -38,11 +38,26 @@ const youtubeId = (u) => {
 
 const toastEl = $('#toast');
 let toastTimer = null;
-function toast(msg) {
-  toastEl.textContent = msg;
+function toast(msg, action = null) {
+  toastEl.replaceChildren();
+  const text = document.createElement('span');
+  text.textContent = msg;
+  toastEl.appendChild(text);
+  toastEl.classList.toggle('has-action', !!action);
+  if (action) {
+    const button = document.createElement('button');
+    button.className = 'toast-action';
+    button.textContent = action.label;
+    button.addEventListener('click', () => {
+      clearTimeout(toastTimer);
+      toastEl.classList.remove('show', 'has-action');
+      action.run();
+    }, { once: true });
+    toastEl.appendChild(button);
+  }
   toastEl.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 3400);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show', 'has-action'), action ? 6000 : 3400);
 }
 
 /* ================= settings ================= */
@@ -82,7 +97,7 @@ function binaural(beat, name, id) {
   };
 }
 
-const SOUNDS = [
+const PROCEDURAL_SOUNDS = [
   binaural(20, 'Binaural Beta', 'binaural-beta'),
   binaural(40, 'Binaural Gamma', 'binaural-gamma'),
   {
@@ -250,6 +265,64 @@ const SOUNDS = [
       return { nodes: [s] };
     },
   },
+];
+
+function recording(id, name) {
+  return {
+    id,
+    name,
+    tag: '',
+    build(c, out, helpers) {
+      const audio = new Audio('../assets/ambience/' + id + '.ogg');
+      audio.loop = true;
+      audio.preload = 'auto';
+      const source = c.createMediaElementSource(audio);
+      source.connect(out);
+      let generated = null;
+      const built = {
+        nodes: [],
+        cleanup() {
+          audio.pause();
+          source.disconnect();
+          audio.removeAttribute('src');
+          audio.load();
+          if (generated?.cleanup) generated.cleanup();
+        },
+      };
+      const fallback = () => {
+        if (generated || !Engine.isActive(id)) return;
+        audio.pause();
+        source.disconnect();
+        const original = PROCEDURAL_SOUNDS.find((sound) => sound.id === id);
+        if (original) {
+          generated = original.build(c, out, helpers);
+          built.nodes = generated.nodes;
+        } else {
+          Engine.stopSound(id);
+          renderSounds();
+          toast(name + ' could not be played.');
+        }
+      };
+      audio.addEventListener('error', fallback, { once: true });
+      audio.play().catch((error) => {
+        if (error.name !== 'AbortError') fallback();
+      });
+      return built;
+    },
+  };
+}
+
+const proceduralById = new Map(PROCEDURAL_SOUNDS.map((sound) => [sound.id, sound]));
+const SOUNDS = [
+  recording('rain', 'Rain'),
+  recording('ocean', 'Ocean'),
+  recording('forest', 'Forest'),
+  recording('fire', 'Fireplace'),
+  recording('cafe', 'Bustling Café'),
+  proceduralById.get('cabin'),
+  proceduralById.get('brown'),
+  proceduralById.get('binaural-beta'),
+  proceduralById.get('binaural-gamma'),
 ];
 
 /* ================= ambient engine ================= */
@@ -489,11 +562,11 @@ const Timer = (() => {
   const MODES = { focus: 'FOCUS', short: 'BREAK', long: 'LONG BREAK' };
   const RING_C = 2 * Math.PI * 140; // 879.65
 
-  let mode = 'focus'; // the tab being viewed
-  let activeMode = null; // the tab whose countdown is actually running
-  // Each tab keeps its own remaining time. Switching tabs never resets
-  // anything; a countdown only starts (or restarts) when START is pressed
-  // on that tab.
+  let mode = 'focus'; // the selected timer mode
+  let activeMode = null; // the mode whose countdown is actually running
+  // Each mode keeps its paused remaining time. Only one mode may run at a
+  // time; changing mode while a session is active is deliberately blocked so
+  // Pause, Reset, and Skip always apply to the time the user can see.
   let remainingByMode = { focus: settings.focus * 60, short: settings.short * 60, long: settings.long * 60 };
   let remaining = remainingByMode.focus;
   let running = false;
@@ -502,6 +575,51 @@ const Timer = (() => {
   let completed = loadJSON('spartacus.completed', 0) % settings.sessions;
 
   const modeTotal = (m) => (m === 'focus' ? settings.focus : m === 'short' ? settings.short : settings.long) * 60;
+  const isMode = (m) => m === 'focus' || m === 'short' || m === 'long';
+
+  function persist() {
+    saveJSON('spartacus.timer', {
+      mode,
+      activeMode,
+      running,
+      endAt: running ? endAt : 0,
+      remainingByMode,
+    });
+  }
+
+  function restore() {
+    const saved = loadJSON('spartacus.timer', null);
+    if (!saved || typeof saved !== 'object') return false;
+    if (isMode(saved.mode)) mode = saved.mode;
+    if (saved.remainingByMode && typeof saved.remainingByMode === 'object') {
+      ['focus', 'short', 'long'].forEach((m) => {
+        const value = Number(saved.remainingByMode[m]);
+        if (Number.isFinite(value) && value >= 0 && value <= modeTotal(m)) remainingByMode[m] = Math.round(value);
+      });
+    }
+    remaining = remainingByMode[mode];
+    if (!saved.running || !isMode(saved.activeMode) || !Number.isFinite(saved.endAt)) {
+      render();
+      return false;
+    }
+
+    const left = Math.max(0, Math.round((saved.endAt - Date.now()) / 1000));
+    activeMode = saved.activeMode;
+    mode = activeMode; // controls always point at the resumed session
+    remainingByMode[activeMode] = left;
+    remaining = left;
+    endAt = saved.endAt;
+    if (left <= 0) {
+      complete(true);
+      return true;
+    }
+    running = true;
+    scheduleTick();
+    persist();
+    render();
+    toast(`${MODES[activeMode]} resumed — ${fmtTime(left)} left.`);
+    return true;
+  }
 
   function tick() {
     const left = Math.max(0, Math.round((endAt - Date.now()) / 1000));
@@ -520,13 +638,14 @@ const Timer = (() => {
   }
 
   function start() {
+    if (running) return;
     if (remaining <= 0) return;
-    // Pressing START on a tab begins (or restarts) that tab's countdown.
     running = true;
     activeMode = mode;
     Engine.stopAlarm();
     window.spartacus.flash(false);
     endAt = Date.now() + remaining * 1000;
+    persist();
     scheduleTick();
     render();
   }
@@ -538,31 +657,36 @@ const Timer = (() => {
     remainingByMode[activeMode] = remaining;
     activeMode = null;
     clearInterval(intervalId);
+    persist();
     render();
   }
 
   function reset() {
-    if (running && activeMode === mode) {
+    if (running) {
       running = false;
       activeMode = null;
       clearInterval(intervalId);
     }
     remainingByMode[mode] = modeTotal(mode);
     remaining = remainingByMode[mode];
+    persist();
     render();
   }
 
   function setMode(m) {
     if (m === mode) return;
-    // Switching tabs never stops or resets anything. The active run keeps
-    // ticking in the background; this tab just shows its own remaining time.
+    if (running) {
+      toast(`${MODES[activeMode]} is running — pause or skip it before changing mode.`);
+      return;
+    }
     remainingByMode[mode] = remaining;
     mode = m;
     remaining = remainingByMode[m];
+    persist();
     render();
   }
 
-  function complete() {
+  function complete(silent = false) {
     clearInterval(intervalId);
     running = false;
     const finished = activeMode;
@@ -572,21 +696,25 @@ const Timer = (() => {
       completed += 1;
       saveJSON('spartacus.completed', completed);
       const long = completed % settings.sessions === 0;
-      if (settings.alarm) Engine.alarm();
-      else Engine.chime();
-      if (settings.notify) {
-        window.spartacus.notify('SPARTACUS', `Focus complete \u2014 time for a ${long ? 'long' : 'short'} break.`);
+      if (!silent) {
+        if (settings.alarm) Engine.alarm();
+        else Engine.chime();
+        if (settings.notify) {
+          window.spartacus.notify('SPARTACUS', `Focus complete \u2014 time for a ${long ? 'long' : 'short'} break.`);
+        }
+        window.spartacus.flash(true);
+        setTimeout(() => window.spartacus.flash(false), 45000);
       }
-      window.spartacus.flash(true);
-      setTimeout(() => window.spartacus.flash(false), 45000);
       mode = long ? 'long' : 'short';
       remaining = modeTotal(mode);
       remainingByMode[mode] = remaining;
-      if (long) toast('Cycle complete \u2014 take a long break.');
-      else toast('Focus session done \u2014 short break.');
+      if (long) toast(silent ? 'Previous focus session ended \u2014 take a long break.' : 'Cycle complete \u2014 take a long break.');
+      else toast(silent ? 'Previous focus session ended \u2014 short break.' : 'Focus session done \u2014 short break.');
     } else {
-      Engine.chime();
-      if (settings.notify) window.spartacus.notify('SPARTACUS', 'Break over \u2014 time to focus.');
+      if (!silent) {
+        Engine.chime();
+        if (settings.notify) window.spartacus.notify('SPARTACUS', 'Break over \u2014 time to focus.');
+      }
       if (finished === 'long') {
         completed = 0;
         saveJSON('spartacus.completed', completed);
@@ -594,8 +722,9 @@ const Timer = (() => {
       mode = 'focus';
       remaining = modeTotal('focus');
       remainingByMode.focus = remaining;
-      toast('Break over \u2014 time to focus.');
+      toast(silent ? 'Previous break ended \u2014 time to focus.' : 'Break over \u2014 time to focus.');
     }
+    persist();
     render();
   }
 
@@ -620,6 +749,7 @@ const Timer = (() => {
     }
     remaining = modeTotal(mode);
     remainingByMode[mode] = remaining;
+    persist();
     render();
   }
 
@@ -632,6 +762,7 @@ const Timer = (() => {
     remainingByMode = { focus: modeTotal('focus'), short: modeTotal('short'), long: modeTotal('long') };
     mode = 'focus';
     remaining = remainingByMode.focus;
+    persist();
     render();
   }
 
@@ -649,7 +780,14 @@ const Timer = (() => {
     $('#modeLabel').textContent = MODES[mode];
     $('#ringProgress').style.strokeDashoffset = String(RING_C * (1 - frac));
     $('#startPauseBtn').textContent = running && activeMode === mode ? 'PAUSE' : 'START';
-    $$('.mode-tab').forEach((t) => t.classList.toggle('active', t.dataset.mode === mode));
+    $$('.mode-tab').forEach((t) => {
+      const isActive = t.dataset.mode === mode;
+      const isLocked = running && t.dataset.mode !== activeMode;
+      t.classList.toggle('active', isActive);
+      t.classList.toggle('locked', isLocked);
+      t.setAttribute('aria-disabled', String(isLocked));
+      t.title = isLocked ? `Pause or skip ${MODES[activeMode]} before changing mode.` : '';
+    });
 
     // Mini-mode widget mirrors the same state.
     $('#miniTime').textContent = fmtTime(remaining);
@@ -671,13 +809,13 @@ const Timer = (() => {
     document.title = running ? `${fmtTime(remaining)} \u00b7 ${MODES[mode]} \u2014 SPARTACUS` : 'SPARTACUS';
   }
 
-  return { render, start, pause, toggle: () => (running && activeMode === mode ? pause() : start()), reset, skip, setMode, applySettings };
+  return { render, restore, start, pause, toggle: () => (running && activeMode === mode ? pause() : start()), reset, skip, setMode, applySettings };
 })();
 
 /* ================= youtube audio player ================= */
 
 // Bundled royalty-free/CC0 lofi tracks (see Settings → credits).
-// Each track has its own themed background (Unsplash, free license).
+// Built-in tracks use local artwork, including shared scenes for the new songs.
 const BUILTIN_TRACKS = [
   { id: 'hanging-lanterns', file: 'hanging-lanterns.mp3', title: 'Hanging Lanterns', author: 'Kalaido', duration: 234 },
   { id: 'bread', file: 'bread.mp3', title: 'Bread', author: 'Lukrembo', duration: 160 },
@@ -688,6 +826,12 @@ const BUILTIN_TRACKS = [
   { id: 'skin', file: 'skin.mp3', title: 'Skin', author: 'MISE', duration: 100 },
   { id: 'pieces-of-stars', file: 'pieces-of-stars.mp3', title: 'Pieces of Stars', author: 'MISE', duration: 106 },
   { id: 'moment', file: 'moment.mp3', title: 'Moment', author: 'MISE', duration: 77 },
+  { id: 'calm-currents', file: 'calm-currents.mp3', title: 'Calm Currents', author: 'HoliznaCC0', duration: 148 },
+  { id: 'still-life', file: 'still-life.mp3', title: 'Still Life', author: 'HoliznaCC0', duration: 135 },
+  { id: 'moon-unit', file: 'moon-unit.mp3', title: 'Moon Unit', author: 'HoliznaCC0', duration: 172 },
+  { id: 'tokyo-sunset', file: 'tokyo-sunset.mp3', title: 'Tokyo Sunset', author: 'HoliznaCC0', duration: 139 },
+  { id: 'waiting-around', file: 'waiting-around.mp3', title: 'Waiting Around', author: 'HoliznaCC0', duration: 152 },
+  { id: 'ease-into-night', file: 'ease-into-night.mp3', title: 'Ease Into Night', author: 'HoliznaCC0', duration: 152 },
 ];
 
 const BUILTIN_BG = {
@@ -700,6 +844,12 @@ const BUILTIN_BG = {
   'skin': '../assets/backgrounds/skin.jpg',
   'pieces-of-stars': '../assets/backgrounds/pieces-of-stars.jpg',
   'moment': '../assets/backgrounds/moment.jpg',
+  'calm-currents': '../assets/backgrounds/waves.jpg',
+  'still-life': '../assets/backgrounds/moment.jpg',
+  'moon-unit': '../assets/backgrounds/pieces-of-stars.jpg',
+  'tokyo-sunset': '../assets/backgrounds/hanging-lanterns.jpg',
+  'waiting-around': '../assets/backgrounds/bread.jpg',
+  'ease-into-night': '../assets/backgrounds/first-snow.jpg',
 };
 const DEFAULT_BG = '../assets/background.jpg';
 
@@ -708,19 +858,27 @@ const DEFAULT_BG = '../assets/background.jpg';
    so lazy loading keeps memory low without visible pop-in. */
 let bgA = true;
 let currentBg = DEFAULT_BG;
+const bgClearTimers = new WeakMap();
 
 function setBackground(key) {
   const url = (key && BUILTIN_BG[key]) || DEFAULT_BG;
   if (url === currentBg) return;
   const activeEl = bgA ? $('#bgA') : $('#bgB');
   const nextEl = bgA ? $('#bgB') : $('#bgA');
+  const pendingClear = bgClearTimers.get(nextEl);
+  if (pendingClear) clearTimeout(pendingClear);
+  bgClearTimers.delete(nextEl);
   nextEl.style.backgroundImage = 'url(' + url + ')';
   nextEl.style.opacity = '1';
   activeEl.style.opacity = '0';
   bgA = !bgA;
   currentBg = url;
   // Free the previous layer's decoded bitmap after the fade completes.
-  setTimeout(() => { activeEl.style.backgroundImage = 'none'; }, 1600);
+  const clearTimer = setTimeout(() => {
+    if (activeEl.style.opacity === '0') activeEl.style.backgroundImage = 'none';
+    bgClearTimers.delete(activeEl);
+  }, 1600);
+  bgClearTimers.set(activeEl, clearTimer);
 }
 
 const Player = (() => {
@@ -733,8 +891,9 @@ const Player = (() => {
   let loading = false;
   let fails = 0;
   let playToken = 0;
-  // Separate volumes: built-in lofi sits lower (background level),
-  // YouTube follows the music card slider.
+  let lastBuiltinQuery = '';
+  // Separate saved volumes: built-in lofi sits lower (background level),
+  // and the player slider controls whichever source is selected.
   let lofiVol = loadJSON('spartacus.lofivol', 0.45);
   let ytVol = loadJSON('spartacus.musicvol', 0.85);
   audio.volume = mode === 'builtin' ? lofiVol : ytVol;
@@ -746,9 +905,22 @@ const Player = (() => {
     return mode === 'builtin' ? BUILTIN_TRACKS[builtinIdx] : queue[current] || null;
   }
 
+  function renderProgress() {
+    const track = currentTrack();
+    const duration = Number.isFinite(audio.duration) ? audio.duration : (track?.duration || 0);
+    const elapsed = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+    const label = (seconds) => `${Math.floor(seconds / 60)}:${pad(Math.floor(seconds) % 60)}`;
+    $('#playElapsed').textContent = label(elapsed);
+    $('#playDuration').textContent = label(Math.round(duration));
+    $('#playProgress').value = duration > 0 ? Math.round(elapsed / duration * 1000) : 0;
+    $('#playProgress').disabled = !audio.currentSrc || duration <= 0;
+  }
+
   audio.addEventListener('playing', () => { loading = false; fails = 0; render(); });
   audio.addEventListener('waiting', () => { loading = true; render(); });
   audio.addEventListener('pause', render);
+  audio.addEventListener('timeupdate', renderProgress);
+  audio.addEventListener('loadedmetadata', renderProgress);
   audio.addEventListener('ended', () => {
     if (mode === 'builtin') playBuiltin((builtinIdx + 1) % BUILTIN_TRACKS.length);
     else if (queue.length > 1) next();
@@ -899,11 +1071,14 @@ const Player = (() => {
       $('#npMeta').textContent =
         (loading ? 'LOADING \u00b7 ' : '') + `${t.author || 'YOUTUBE'} \u00b7 ${fmtDur(t.duration)}`;
       $('#playBtn').textContent = audio.paused ? '\u25b6' : '\u275a\u275a';
+      $('#playerSource').textContent = mode === 'builtin' ? 'BUILT-IN LOFI' : 'YOUTUBE AUDIO';
     } else {
       $('#npTitle').textContent = 'NOTHING PLAYING';
       $('#npMeta').textContent = 'PICK A LOFI TRACK OR ADD A YOUTUBE LINK';
       $('#playBtn').textContent = '\u25b6';
+      $('#playerSource').textContent = 'LOFI / YOUTUBE';
     }
+    renderProgress();
 
     const list = $('#queueList');
     list.innerHTML = '';
@@ -945,43 +1120,78 @@ const Player = (() => {
     }
 
     const bl = $('#builtinList');
-    bl.innerHTML = '';
-    BUILTIN_TRACKS.forEach((tr, i) => {
+    bl.replaceChildren();
+    const query = $('#builtinSearch').value.trim().toLocaleLowerCase();
+    const matches = BUILTIN_TRACKS.map((track, index) => ({ track, index }))
+      .filter(({ track }) => !query || (track.title + ' ' + track.author).toLocaleLowerCase().includes(query));
+    $('#builtinCount').textContent = query
+      ? `${matches.length} OF ${BUILTIN_TRACKS.length} TRACKS`
+      : `${BUILTIN_TRACKS.length} TRACKS · OFFLINE`;
+    if (!matches.length) {
+      const empty = document.createElement('li');
+      empty.className = 'q-empty';
+      empty.textContent = 'NO MATCHING TRACKS';
+      bl.appendChild(empty);
+    }
+    matches.forEach(({ track, index }) => {
       const li = document.createElement('li');
-      li.className = 'q-row' + (mode === 'builtin' && i === builtinIdx ? ' current' : '');
-
-      const idx = document.createElement('span');
-      idx.className = 'q-idx';
-      idx.textContent = pad(i + 1);
-
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'lofi-row' + (mode === 'builtin' && index === builtinIdx ? ' current' : '');
+      button.setAttribute('aria-label', `${track.title} by ${track.author}, ${fmtDur(track.duration)}`);
+      button.setAttribute('aria-pressed', mode === 'builtin' && index === builtinIdx ? 'true' : 'false');
+      const number = document.createElement('span');
+      number.className = 'lofi-number';
+      number.textContent = mode === 'builtin' && index === builtinIdx && !audio.paused ? '♫' : pad(index + 1);
+      const copy = document.createElement('span');
+      copy.className = 'lofi-copy';
       const title = document.createElement('span');
-      title.className = 'q-title';
-      title.textContent = tr.title;
-
+      title.className = 'lofi-title';
+      title.textContent = track.title;
       const author = document.createElement('span');
-      author.className = 'q-author';
-      author.textContent = tr.author;
-
-      const dur = document.createElement('span');
-      dur.className = 'q-dur';
-      dur.textContent = fmtDur(tr.duration);
-
-      li.append(idx, title, author, dur);
-      li.addEventListener('click', () => {
-        if (mode === 'builtin' && i === builtinIdx) toggle();
-        else playBuiltin(i);
+      author.className = 'lofi-author';
+      author.textContent = track.author;
+      copy.append(title, author);
+      const duration = document.createElement('span');
+      duration.className = 'lofi-duration';
+      duration.textContent = fmtDur(track.duration);
+      button.append(number, copy, duration);
+      button.addEventListener('click', () => {
+        if (mode === 'builtin' && index === builtinIdx) toggle();
+        else playBuiltin(index);
       });
+      li.appendChild(button);
       bl.appendChild(li);
     });
+    if (query !== lastBuiltinQuery && !query && mode === 'builtin') {
+      const selected = bl.querySelector('.lofi-row.current');
+      if (selected) bl.scrollTop = Math.max(0, selected.offsetTop - bl.offsetTop - bl.clientHeight / 2);
+    }
+    lastBuiltinQuery = query;
 
-    $('#musicVol').value = Math.round(ytVol * 100);
+    $('#musicVol').value = Math.round((mode === 'builtin' ? lofiVol : ytVol) * 100);
     $('#builtinVol').value = Math.round(lofiVol * 100);
   }
 
   return {
     render, add, toggle, next, prev, playBuiltin,
-    setVolume: (v) => { ytVol = v; saveJSON('spartacus.musicvol', v); if (mode === 'youtube') audio.volume = v; },
-    setLofiVolume: (v) => { lofiVol = v; saveJSON('spartacus.lofivol', v); if (mode === 'builtin') audio.volume = v; },
+    seek: (fraction) => {
+      if (audio.currentSrc && Number.isFinite(audio.duration) && audio.duration > 0) {
+        audio.currentTime = Math.max(0, Math.min(1, fraction)) * audio.duration;
+      }
+    },
+    setVolume: (v) => {
+      if (mode === 'builtin') {
+        lofiVol = v; saveJSON('spartacus.lofivol', v); audio.volume = v;
+        $('#builtinVol').value = Math.round(v * 100);
+      } else {
+        ytVol = v; saveJSON('spartacus.musicvol', v); audio.volume = v;
+      }
+    },
+    setLofiVolume: (v) => {
+      lofiVol = v; saveJSON('spartacus.lofivol', v);
+      if (mode === 'builtin') { audio.volume = v; $('#musicVol').value = Math.round(v * 100); }
+    },
     isActuallyPlaying: () => !audio.paused && audio.currentTime > 0 && !audio.ended,
   };
 })();
@@ -1106,9 +1316,10 @@ function saveSettings() {
 /* ================= goals ================= */
 
 const Goals = (() => {
-  const data = loadJSON('spartacus.goals', { vision: [], yearly: {}, quarterly: {}, monthly: {} });
-  // Normalize older persisted shapes (e.g., before yearly existed).
+  const data = loadJSON('spartacus.goals', { vision: [], threeYear: [], yearly: {}, quarterly: {}, monthly: {} });
+  // Normalize older persisted shapes as goal horizons are introduced.
   data.vision = data.vision || [];
+  data.threeYear = data.threeYear || [];
   data.yearly = data.yearly || {};
   data.quarterly = data.quarterly || {};
   data.monthly = data.monthly || {};
@@ -1121,8 +1332,7 @@ const Goals = (() => {
 
   // Recompute on every render so year/quarter/month rollovers apply even if
   // the app stays open across the boundary.
-  function updatePeriod() {
-    const now = new Date();
+  function updatePeriod(now = new Date()) {
     const q = Math.floor(now.getMonth() / 3) + 1;
     yKey = String(now.getFullYear());
     qKey = now.getFullYear() + '-Q' + q;
@@ -1136,17 +1346,23 @@ const Goals = (() => {
 
   const listFor = (kind) => {
     if (kind === 'vision') return data.vision;
+    if (kind === 'threeYear') return data.threeYear;
     if (kind === 'year') { data.yearly[yKey] = data.yearly[yKey] || []; return data.yearly[yKey]; }
     if (kind === 'quarter') { data.quarterly[qKey] = data.quarterly[qKey] || []; return data.quarterly[qKey]; }
     data.monthly[mKey] = data.monthly[mKey] || [];
     return data.monthly[mKey];
   };
 
-  function add(kind, text) {
+  const PARENT_KIND = { threeYear: 'vision', year: 'threeYear', quarter: 'year', month: 'quarter' };
+
+  function add(kind, text, parentId = '', periodOverride = null) {
+    if (periodOverride) updatePeriod(periodOverride);
     text = text.trim();
     if (!text) return null;
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    listFor(kind).push({ id, text, done: false });
+    const goal = { id, text, done: false };
+    if (PARENT_KIND[kind] && parentId) goal.parentId = parentId;
+    listFor(kind).push(goal);
     save();
     render();
     return id;
@@ -1160,7 +1376,86 @@ const Goals = (() => {
   function remove(kind, id) {
     const arr = listFor(kind);
     const idx = arr.findIndex((x) => x.id === id);
-    if (idx >= 0) { arr.splice(idx, 1); save(); render(); }
+    if (idx < 0) return;
+    const [goal] = arr.splice(idx, 1);
+    save();
+    render();
+    toast('Goal removed.', {
+      label: 'UNDO',
+      run: () => {
+        const target = listFor(kind);
+        if (target.some((item) => item.id === goal.id)) return;
+        target.splice(Math.min(idx, target.length), 0, goal);
+        save();
+        render();
+        toast('Goal restored.');
+      },
+    });
+  }
+
+  function parentText(kind, parentId) {
+    if (!parentId || !PARENT_KIND[kind]) return '';
+    const parent = listFor(PARENT_KIND[kind]).find((goal) => goal.id === parentId);
+    return parent ? parent.text : 'Parent goal was removed';
+  }
+
+  function renderParentSelect(selectId, kind) {
+    const select = $('#' + selectId);
+    const parentKind = PARENT_KIND[kind];
+    const empty = document.createElement('option');
+    empty.value = '';
+    empty.textContent = parentKind ? `LINK TO ${parentKind === 'vision' ? '5-YEAR VISION' : 'PARENT'} (OPTIONAL)` : '';
+    select.replaceChildren(empty);
+    if (!parentKind) return;
+    listFor(parentKind).forEach((goal) => {
+      const option = document.createElement('option');
+      option.value = goal.id;
+      option.textContent = goal.text;
+      select.appendChild(option);
+    });
+  }
+
+  function renderHistory() {
+    const kind = $('#historyKind').value;
+    const keySelect = $('#historyKey');
+    const list = $('#historyList');
+    const map = kind === 'year' ? data.yearly : kind === 'quarter' ? data.quarterly : data.monthly;
+    const currentKey = kind === 'year' ? yKey : kind === 'quarter' ? qKey : mKey;
+    const keys = Object.keys(map).filter((key) => key !== currentKey).sort().reverse();
+    const selected = keys.includes(keySelect.value) ? keySelect.value : keys[0] || '';
+    keySelect.replaceChildren();
+    keys.forEach((key) => {
+      const option = document.createElement('option');
+      option.value = key;
+      if (kind === 'quarter') option.textContent = key.replace(/(\d{4})-Q(\d)/, 'Q$2 $1');
+      else if (kind === 'month') {
+        const [year, month] = key.split('-').map(Number);
+        option.textContent = new Date(year, month - 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+      } else option.textContent = key;
+      option.selected = key === selected;
+      keySelect.appendChild(option);
+    });
+    list.innerHTML = '';
+    const goals = selected ? map[selected] || [] : [];
+    if (!goals.length) {
+      const li = document.createElement('li');
+      li.className = 'q-empty';
+      li.textContent = keys.length ? 'No goals in this period' : 'No past goals yet';
+      list.appendChild(li);
+      return;
+    }
+    goals.forEach((goal) => {
+      const li = document.createElement('li');
+      li.className = 'goal-row' + (goal.done ? ' done' : '');
+      const mark = document.createElement('span');
+      mark.className = 'goal-check';
+      mark.setAttribute('aria-hidden', 'true');
+      const text = document.createElement('span');
+      text.className = 'goal-text';
+      text.textContent = goal.text;
+      li.append(mark, text);
+      list.appendChild(li);
+    });
   }
 
   function renderList(ulId, arr, kind, countId) {
@@ -1184,9 +1479,19 @@ const Goals = (() => {
       chk.title = 'Toggle done';
       chk.addEventListener('click', () => toggle(kind, it.id));
 
+      const copy = document.createElement('div');
+      copy.className = 'goal-copy';
       const txt = document.createElement('span');
       txt.className = 'goal-text';
       txt.textContent = it.text;
+      copy.appendChild(txt);
+      const parent = parentText(kind, it.parentId);
+      if (parent) {
+        const link = document.createElement('span');
+        link.className = 'goal-parent-link';
+        link.textContent = '\u2191 ' + parent;
+        copy.appendChild(link);
+      }
 
       const rm = document.createElement('button');
       rm.className = 'goal-remove';
@@ -1194,7 +1499,7 @@ const Goals = (() => {
       rm.title = 'Remove';
       rm.addEventListener('click', () => remove(kind, it.id));
 
-      li.append(chk, txt, rm);
+      li.append(chk, copy, rm);
       ul.appendChild(li);
     });
   }
@@ -1202,9 +1507,15 @@ const Goals = (() => {
   function render() {
     updatePeriod();
     renderList('visionList', data.vision, 'vision', 'visionCount');
+    renderList('threeYearList', data.threeYear, 'threeYear', 'threeYearCount');
     renderList('yearList', listFor('year'), 'year', 'yearCount');
     renderList('quarterList', listFor('quarter'), 'quarter', 'quarterCount');
     renderList('monthList', listFor('month'), 'month', 'monthCount');
+    renderParentSelect('threeYearParent', 'threeYear');
+    renderParentSelect('yearParent', 'year');
+    renderParentSelect('quarterParent', 'quarter');
+    renderParentSelect('monthParent', 'month');
+    renderHistory();
     $('#yearLabel').textContent = Y_LABEL;
     $('#quarterLabel').textContent = Q_LABEL;
     $('#monthLabel').textContent = M_LABEL;
@@ -1295,16 +1606,24 @@ $('#viewTabs').addEventListener('click', (e) => {
 });
 
 // Goals wiring: ADD buttons + Enter key
-const bindGoalInput = (inputId, btnId, kind) => {
+const bindGoalInput = (inputId, btnId, kind, parentId = '') => {
   const input = $('#' + inputId);
-  const add = () => { Goals.add(kind, input.value); input.value = ''; input.focus(); };
+  const add = () => {
+    const parent = parentId ? $('#' + parentId).value : '';
+    Goals.add(kind, input.value, parent);
+    input.value = '';
+    input.focus();
+  };
   $('#' + btnId).addEventListener('click', add);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
 };
 bindGoalInput('visionInput', 'visionAddBtn', 'vision');
-bindGoalInput('yearInput', 'yearAddBtn', 'year');
-bindGoalInput('quarterInput', 'quarterAddBtn', 'quarter');
-bindGoalInput('monthInput', 'monthAddBtn', 'month');
+bindGoalInput('threeYearInput', 'threeYearAddBtn', 'threeYear', 'threeYearParent');
+bindGoalInput('yearInput', 'yearAddBtn', 'year', 'yearParent');
+bindGoalInput('quarterInput', 'quarterAddBtn', 'quarter', 'quarterParent');
+bindGoalInput('monthInput', 'monthAddBtn', 'month', 'monthParent');
+$('#historyKind').addEventListener('change', () => Goals.render());
+$('#historyKey').addEventListener('change', () => Goals.render());
 
 // Click the quote to fetch a fresh one from the API.
 $('#quoteLine').addEventListener('click', () => Quote.refresh(true));
@@ -1318,6 +1637,8 @@ $('#nextBtn').addEventListener('click', () => Player.next());
 $('#prevBtn').addEventListener('click', () => Player.prev());
 $('#musicVol').addEventListener('input', (e) => Player.setVolume(e.target.value / 100));
 $('#builtinVol').addEventListener('input', (e) => Player.setLofiVolume(e.target.value / 100));
+$('#builtinSearch').addEventListener('input', () => Player.render());
+$('#playProgress').addEventListener('change', (e) => Player.seek(e.target.value / 1000));
 $('#masterVol').addEventListener('input', (e) => Engine.setAmbientVol(e.target.value / 100));
 
 $('#btnSettings').addEventListener('click', openSettings);
@@ -1358,6 +1679,7 @@ renderSounds();
 Player.render();
 Goals.render();
 Quote.init();
+Timer.restore();
 
 // Smoke hook: exercise alarm + notification + taskbar flash without waiting.
 if (window.spartacus.smoke) {
@@ -1391,6 +1713,40 @@ if (window.spartacus.smoke) {
     }, 3000);
   }, 9000);
   setTimeout(() => {
+    const visionId = Goals.add('vision', 'Become a consistent finisher');
+    const id = Goals.add('threeYear', 'Build a durable focus habit', visionId);
+    Goals.toggle('threeYear', id);
+    const stored = loadJSON('spartacus.goals', {}).threeYear || [];
+    const addedAndSaved = stored.some((goal) => goal.id === id && goal.done && goal.parentId === visionId);
+    const visible = $('#threeYearCount').textContent === '1/1' && !!$('#threeYearList .goal-parent-link');
+    Goals.remove('threeYear', id);
+    Goals.remove('vision', visionId);
+    const removed = $('#threeYearCount').textContent === '0/0' && $('#visionCount').textContent === '0/0';
+    console.log('[smoke] three-year goals | saved:', addedAndSaved, '| linked:', visible,
+      '| removed:', removed ? 'YES' : 'NO', '|', addedAndSaved && visible && removed ? 'OK' : 'FAIL');
+  }, 12500);
+  setTimeout(() => {
+    const pastYear = new Date().getFullYear() - 1;
+    Goals.add('month', 'Review last year', '', new Date(pastYear, 0, 15));
+    $('#historyKind').value = 'month';
+    $('#historyKind').dispatchEvent(new Event('change'));
+    $('#historyKey').value = `${pastYear}-01`;
+    $('#historyKey').dispatchEvent(new Event('change'));
+    const visible = $('#historyList').textContent.includes('Review last year');
+    console.log('[smoke] goals history | past period visible:', visible ? 'YES' : 'NO', '|', visible ? 'OK' : 'FAIL');
+  }, 13250);
+  setTimeout(() => {
+    const id = Goals.add('vision', 'Protect time for deep work');
+    Goals.remove('vision', id);
+    const undo = $('.toast-action');
+    const hadUndo = !!undo;
+    if (undo) undo.click();
+    const count = $('#visionCount').textContent;
+    const restored = count === '0/1';
+    console.log('[smoke] goal undo | action:', hadUndo ? 'YES' : 'NO', '| count:', count,
+      '| restored:', restored ? 'YES' : 'NO', '|', restored ? 'OK' : 'FAIL');
+  }, 13750);
+  setTimeout(() => {
     // Per-tab memory: switching tabs must not reset their timers.
     Timer.setMode('short');
     const t1 = document.getElementById('timeDisplay').textContent;
@@ -1408,31 +1764,40 @@ if (window.spartacus.smoke) {
     }, 2200);
   }, 14000);
   setTimeout(() => {
-    // Keep-running: switching tabs must NOT stop the active run.
-    // Starting on another tab moves the run to that tab, preserving the old one.
+    // A running session locks the other mode tabs. This keeps the visible
+    // timer and every control (pause/reset/skip) on the same session.
     Timer.reset();
     Timer.setMode('focus');
-    Timer.toggle(); // start focus
+    Timer.toggle();
     setTimeout(() => {
-      Timer.setMode('short'); // focus must keep running
+      Timer.setMode('short'); // must be blocked while Focus is running
       const btn = document.getElementById('startPauseBtn').textContent;
-      const b1 = document.getElementById('timeDisplay').textContent; // break's own memory, static
+      const selected = document.querySelector('.mode-tab.active').dataset.mode;
+      const t1 = document.getElementById('timeDisplay').textContent;
       setTimeout(() => {
-        Timer.setMode('focus');
-        const f1 = document.getElementById('timeDisplay').textContent; // focus still ticking
-        Timer.setMode('short');
-        Timer.toggle(); // move the run to break
-        setTimeout(() => {
-          const b2 = document.getElementById('timeDisplay').textContent; // break ticking from its memory
-          Timer.setMode('focus');
-          const f2 = document.getElementById('timeDisplay').textContent; // focus preserved, frozen
-          const ok = btn === 'START' && b2 < b1 && f1.startsWith('24:') && f2.startsWith('24:');
-          console.log('[smoke] keep-running | button on break:', btn, '| break memory:', b1,
-            '| focus still ticking:', f1, '| break ticking:', b2, '| focus preserved:', f2,
-            '|', ok ? 'OK' : 'FAIL');
-          Timer.reset();
-        }, 1500);
-      }, 2000);
+        const t2 = document.getElementById('timeDisplay').textContent;
+        Timer.skip();
+        const nextMode = document.querySelector('.mode-tab.active').dataset.mode;
+        const nextTime = document.getElementById('timeDisplay').textContent;
+        const ok = btn === 'PAUSE' && selected === 'focus' && t2 < t1 && nextMode === 'short' && nextTime === '05:00';
+        console.log('[smoke] mode lock | selected after Break click:', selected,
+          '| focus ticking:', t1, '→', t2, '| after skip:', nextMode, nextTime,
+          '|', ok ? 'OK' : 'FAIL');
+        Timer.reset();
+      }, 1500);
     }, 1500);
   }, 19000);
+  setTimeout(() => {
+    Timer.setMode('focus');
+    Timer.reset();
+    Timer.start();
+    setTimeout(() => {
+      const before = document.getElementById('timeDisplay').textContent;
+      Timer.restore();
+      const after = document.getElementById('timeDisplay').textContent;
+      const resumed = document.getElementById('startPauseBtn').textContent === 'PAUSE' && after <= before;
+      Timer.pause();
+      console.log('[smoke] timer recovery | resumed:', resumed ? 'YES' : 'NO', '|', resumed ? 'OK' : 'FAIL');
+    }, 1000);
+  }, 23500);
 }
