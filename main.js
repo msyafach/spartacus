@@ -538,14 +538,14 @@ ipcMain.on('win:flash', (_e, on) => {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.flashFrame(!!on);
 });
 
-// Mini mode: the window shrinks into a tiny always-on-top countdown widget.
+// Mini mode: the window shrinks into an always-on-top version of the timer ring.
 ipcMain.on('win:mini-mode', (_e, on) => {
   if (!mainWindow) return;
   if (on) {
     if (mainWindow.isMaximized()) mainWindow.unmaximize();
-    mainWindow.setMinimumSize(264, 124);
-    mainWindow.setMaximumSize(264, 124);
-    mainWindow.setSize(264, 124);
+    mainWindow.setMinimumSize(200, 200);
+    mainWindow.setMaximumSize(200, 200);
+    mainWindow.setSize(200, 200);
     mainWindow.setAlwaysOnTop(true, 'floating');
   } else {
     mainWindow.setAlwaysOnTop(false);

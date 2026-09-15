@@ -23,12 +23,19 @@
   </header>
 
   <div class="mini-bar" id="miniBar" title="Click to restore">
-    <div class="mini-row">
-      <span class="mini-label" id="miniLabel">FOCUS</span>
-      <span class="mini-time" id="miniTime">25:00</span>
+    <div class="mini-ring-wrap">
+      <svg class="ring" viewBox="0 0 300 300" aria-hidden="true">
+        <circle class="ring-track" cx="150" cy="150" r="140"></circle>
+        <circle class="ring-progress" id="miniRingProgress" cx="150" cy="150" r="140"></circle>
+      </svg>
+      <div class="mini-fire" aria-hidden="true">
+        <img id="miniTimerFire" src="../assets/timer/flame-full-animated.webp" alt="" />
+      </div>
+      <div class="mini-ring-center">
+        <span class="mini-time" id="miniTime">25:00</span>
+        <span class="mini-label" id="miniLabel">FOCUS</span>
+      </div>
     </div>
-    <div class="mini-progress"><div class="mini-progress-fill" id="miniProgressFill"></div></div>
-    <div class="mini-quote" id="miniQuote"></div>
   </div>
 
   <main>
@@ -50,6 +57,9 @@
           <circle class="ring-track" cx="150" cy="150" r="140"></circle>
           <circle class="ring-progress" id="ringProgress" cx="150" cy="150" r="140"></circle>
         </svg>
+        <div class="timer-fire" aria-hidden="true">
+          <img id="timerFire" src="../assets/timer/flame-full-animated.webp" alt="" />
+        </div>
         <div class="ring-center">
           <div class="time" id="timeDisplay">25:00</div>
           <div class="time-label" id="modeLabel">FOCUS</div>
@@ -217,7 +227,8 @@
       <div class="credits">
         BUILT-IN MUSIC: <a href="https://freemusicarchive.org/music/holiznacc0/public-domain-lofi/" target="_blank" rel="noopener noreferrer">HOLIZNACC0</a> (CC0), MISE &mdash; BLURRED MEMORIES (CC0 / PUBLIC DOMAIN) &middot;
         LUKREMBO, KALAIDO, KERUSU, MATT QUENTIN (ROYALTY-FREE, USED WITH CREDIT) &middot;
-        AMBIENCE: PUBLIC DOMAIN / CC0 RECORDINGS; <a href="https://commons.wikimedia.org/wiki/File:Campfire_sound_ambience.ogg" target="_blank" rel="noopener noreferrer">CAMPFIRE SOUND AMBIENCE BY GLANEUR DE SONS</a> (<a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener noreferrer">CC BY 3.0</a>, TRIMMED / FILTERED / COMPRESSED / CROSSFADED LOOP) &middot;
+        AMBIENCE: PUBLIC DOMAIN / CC0 RECORDINGS; FIREPLACE FROM <a href="https://commons.wikimedia.org/wiki/File:Valley_Forge_Yule_Log.webm" target="_blank" rel="noopener noreferrer">VALLEY FORGE NPS</a> (PUBLIC DOMAIN, EDITED LOOP) &middot;
+        TIMER FIRE: <a href="https://cgheven.com/assets/large-campfire-loop-no-smoke-flipbooks-6x6-8x8" target="_blank" rel="noopener noreferrer">AMMAR KHAN / CGHEVEN</a> (CC0) &middot;
         APP ICON: ORIGINAL SPARTACUS HELMET MARK
       </div>
       <div class="philosophy">

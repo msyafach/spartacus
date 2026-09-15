@@ -21,13 +21,13 @@ Spartacus keeps the things that help you focus close, and the things that distra
 - One calm window. The timer, your sounds, and your goals sit side by side. No feeds, no ads, no noise.
 - Sounds that support you. Ambient soundscapes and lofi music play without video, ads, or endless browsing. Paste a YouTube link and only the audio comes in.
 - Every session connects to something bigger. Link your five-year vision to three-year targets, then to this year's, this quarter's, and this month's goals. Review past periods whenever you need perspective.
-- It gets out of your way. Shrink the app into a tiny widget that floats above your other windows and shows the time left, so your screen stays yours.
+- It gets out of your way. Shrink the app into a miniature version of the timer that floats above your other windows, so your screen stays yours.
 
 ## What
 
 ### Focus timer with a gentle alarm
 
-Work in 25 minute sessions with short breaks in between. The ring empties as time passes. When a session ends you get a soft bell melody, a notification, and the taskbar flashes. No harsh buzzer. A running session is kept safe: close and reopen the app and it resumes with its accurate time left; if it ended while you were away, Spartacus calmly moves you to the next session.
+Work in 25 minute sessions with short breaks in between. The ring empties and a naturally animated campfire burns down from a full flame to glowing embers as time passes. When a session ends you get a soft bell melody, a notification, and the taskbar flashes. No harsh buzzer. A running session is kept safe: close and reopen the app and it resumes with its accurate time left; if it ended while you were away, Spartacus calmly moves you to the next session.
 
 ### Goals from five years down to this month
 
@@ -49,13 +49,13 @@ Paste any YouTube link. Spartacus extracts just the audio, keeps it on your comp
 
 ### A tiny window that stays with you
 
-Click the minimize button and Spartacus becomes a small widget floating above your windows, showing the time left in your session and a motivational quote.
+Click the mini mode button and Spartacus shows a smaller version of the main timer: the animated fire, circular progress ring, remaining time, and session label. The timer keeps running, with its alarm and notification at the end of the session.
 
 ![Mini mode](screenshots/4-mini.png)
 
 ### Daily motivation
 
-A fresh quote appears in the app and in the mini window, refreshed every 30 minutes (or click it for a new one). Quotes are picked from a curated library about focus, discipline, and persistence, with relevant ones from live sources mixed in.
+A fresh quote appears in the main app, refreshed every 30 minutes (or click it for a new one). Quotes are picked from a curated library about focus, discipline, and persistence, with relevant ones from live sources mixed in.
 
 ### Settings that stay out of your way
 

@@ -779,6 +779,15 @@ const Timer = (() => {
     $('#timeDisplay').textContent = fmtTime(remaining);
     $('#modeLabel').textContent = MODES[mode];
     $('#ringProgress').style.strokeDashoffset = String(RING_C * (1 - frac));
+
+    const flameStage = frac > 0.55 ? 'full' : frac > 0.18 ? 'half' : 'ember';
+    const flameSrc = `../assets/timer/flame-${flameStage}-animated.webp`;
+    [$('#timerFire'), $('#miniTimerFire')].forEach((flame) => {
+      if (flame.dataset.stage === flameStage) return;
+      flame.dataset.stage = flameStage;
+      flame.src = flameSrc;
+    });
+
     $('#startPauseBtn').textContent = running && activeMode === mode ? 'PAUSE' : 'START';
     $$('.mode-tab').forEach((t) => {
       const isActive = t.dataset.mode === mode;
@@ -789,10 +798,9 @@ const Timer = (() => {
       t.title = isLocked ? `Pause or skip ${MODES[activeMode]} before changing mode.` : '';
     });
 
-    // Mini-mode widget mirrors the same state.
     $('#miniTime').textContent = fmtTime(remaining);
     $('#miniLabel').textContent = MODES[mode];
-    $('#miniProgressFill').style.width = (frac * 100).toFixed(1) + '%';
+    $('#miniRingProgress').style.strokeDashoffset = String(RING_C * (1 - frac));
 
     let filled = completed % settings.sessions;
     if (completed > 0 && filled === 0 && mode !== 'focus') filled = settings.sessions;
@@ -1533,7 +1541,6 @@ const Quote = (() => {
   function show(q) {
     $('#quoteText').textContent = q.text;
     $('#quoteAuthor').textContent = q.author ? '\u2014 ' + q.author : '';
-    $('#miniQuote').textContent = q.text;
   }
 
   async function refresh(manual = false) {
@@ -1582,7 +1589,7 @@ function enterMini() {
   miniMode = true;
   document.body.classList.add('mini-mode');
   window.spartacus.setMiniMode(true);
-  Timer.render(); // refresh the widget immediately
+  Timer.render();
 }
 
 function exitMini() {
@@ -1697,8 +1704,8 @@ if (window.spartacus.smoke) {
     const time = document.getElementById('miniTime').getBoundingClientRect();
     console.log('[smoke] mini mode entered | titlebar bottom:', title.bottom.toFixed(0),
       '| mini-bar top:', bar.top.toFixed(0),
-      '| time visible:', time.top >= title.bottom ? 'YES' : 'NO',
-      '| time text:', document.getElementById('miniTime').textContent);
+      '| mini timer visible:', time.top >= title.bottom ? 'YES' : 'NO',
+      '| mini matches main:', $('#miniTime').textContent === $('#timeDisplay').textContent ? 'YES' : 'NO');
     setTimeout(() => {
       exitMini();
       console.log('[smoke] mini mode exited');

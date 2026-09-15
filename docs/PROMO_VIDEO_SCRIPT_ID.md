@@ -28,7 +28,7 @@
 | 16–23 sec | Slow vertical parallax over Goals; focus on 5 Years → 3 Years → Year. | `screenshots/promo-02-goals.png` | “From a five-year vision, to three-year goals, to this month’s next step—everything stays connected.” | `VISION → PLAN → ACTION.` |
 | 23–27 sec | Pan over a parent link, then transition to the open History view. | `screenshots/promo-05-goals-history.png` | “See your progress without losing sight of the goals you once wrote down.” | `EVERY STEP HAS A WHY.` |
 | 27–32 sec | Reveal the YouTube audio card from below; animate as if a link has just been pasted. | `screenshots/promo-06-youtube.png` | “Choose rain, ocean, a café, or lofi. No feeds. No ads. No distracting video.” | `AUDIO ONLY. NO DISTRACTIONS.` |
-| 32–36 sec | Let the UI shrink cleanly into mini mode, then give it a slow floating motion. | `screenshots/promo-07-mini.png` | “When you need space, Spartacus becomes a small timer that stays with you.” | `STAY WITH THE SESSION.` |
+| 32–36 sec | Let the full timer ring shrink cleanly into mini mode, then give it a slow floating motion. | `screenshots/promo-07-mini.png` | “When you need space, Spartacus becomes a small timer that stays with you.” | `STAY WITH THE SESSION.` |
 | 36–40 sec | Fade to Settings; focus on duration, rounds, alarm, and notifications. | `screenshots/promo-08-settings.png` | “Set your rhythm. Then let the app get out of your way.” | `YOUR RHYTHM. YOUR RULES.` |
 | 40–45 sec | Return to the hero timer; slow push-in, then fade to black. | `screenshots/promo-01-timer.png` | “One calm place to take back your time. Spartacus. Focus with purpose.” | `SPARTACUS`<br>`FOCUS WITH PURPOSE.` |
 

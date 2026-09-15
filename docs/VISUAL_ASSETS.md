@@ -2,6 +2,8 @@
 
 The application backgrounds were generated with Codex's built-in image generation tool, then saved as JPEG (quality 93) at 1672 × 941. The Windows icon and installer artwork are rendered from the project-owned vector mark in `assets/helmet.svg` using `npx electron tools/make-icons.js`. The generated icon concept was redrawn as a clean vector so small Windows icon sizes stay legible.
 
+The timer fire uses Ammar Khan / CGHEVEN's 4K **Large Campfire Loop - No Smoke** 8×8 flipbook under the [CC0 license](https://cgheven.com/assets/large-campfire-loop-no-smoke-flipbooks-6x6-8x8). Its 64 rendered frames are composited with one consistent fire pit base into full, half, and ember stages. The release includes only the optimized animated WebP files; rebuilding instructions and source details are in `assets/timer/README.md`.
+
 ## Prompts
 
 Default background:
