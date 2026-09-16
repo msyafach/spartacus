@@ -4,6 +4,8 @@ The application backgrounds were generated with Codex's built-in image generatio
 
 The timer fire uses [AutoSprite's CC0 Campfire animation](https://www.autosprite.io/free-sprites/campfire). The flame, sparks, wood, and stones are one integrated source animation, with 16 frames smoothly interpolated to 64 output frames. The logs and stones remain fixed while only the flame shrinks between full, half, and ember stages; no previously generated campfire base is included. The release contains only optimized animated WebP files; rebuilding instructions are in `assets/timer/README.md`.
 
+The timer numerals use [DSEG7 Modern](https://github.com/keshikan/DSEG), a seven-segment display font by keshikan. The bundled WOFF2 file and its SIL Open Font License 1.1 are in `assets/fonts/`. Each digit has the same advance width, so the countdown stays centered while its value changes.
+
 ## Prompts
 
 Default background:

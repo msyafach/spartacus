@@ -2,6 +2,14 @@
    SPARTACUS — minimalist monochrome
    ============================================================ */
 
+@font-face {
+  font-family: "DSEG7 Modern";
+  src: url("../assets/fonts/DSEG7Modern-Regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 :root {
   --bg: #000;
   --ink: #f4f4f4;
@@ -210,16 +218,14 @@ main {
 }
 
 .time {
-  padding: 5px 14px 4px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 5px;
-  background: rgba(0, 0, 0, 0.72);
-  box-shadow: 0 7px 22px rgba(0, 0, 0, 0.55);
-  font-size: 45px;
-  font-weight: 100;
-  letter-spacing: 0.06em;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
+  padding: 4px 0 2px;
+  font-family: "DSEG7 Modern", monospace;
+  font-size: 44px;
+  font-weight: 400;
+  letter-spacing: 0.045em;
+  line-height: 1.15;
+  white-space: nowrap;
+  text-shadow: 0 2px 5px rgba(0, 0, 0, 0.95), 0 0 16px rgba(0, 0, 0, 0.8);
 }
 
 .time-label { font-size: 11px; letter-spacing: 0.5em; color: var(--ink-dim); }
@@ -849,15 +855,14 @@ body.mini-mode .mini-bar {
   z-index: 2;
 }
 .mini-time {
-  padding: 3px 7px 2px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 3px;
-  background: rgba(0, 0, 0, 0.72);
+  padding: 2px 0 1px;
+  font-family: "DSEG7 Modern", monospace;
   font-size: 23px;
-  font-weight: 100;
-  letter-spacing: 0.04em;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
+  font-weight: 400;
+  letter-spacing: 0.035em;
+  line-height: 1.15;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.98), 0 0 9px rgba(0, 0, 0, 0.82);
 }
 .mini-label { font-size: 8px; letter-spacing: 0.32em; color: var(--ink-dim); }
 
