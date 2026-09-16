@@ -1,7 +1,7 @@
 {
   "name": "spartacus",
   "productName": "Spartacus",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Minimalist black & white focus companion: Pomodoro timer, layered ambient soundscapes, and YouTube audio-only music.",
   "main": "main.js",
   "author": {
@@ -31,6 +31,7 @@
       "renderer/**/*",
       "assets/**/*",
       "!assets/timer/source/**/*",
+      "!assets/ambience/source/**/*",
       "!assets/timer/*-contact-sheet.jpg",
       "bin/yt-dlp.exe",
       "package.json"

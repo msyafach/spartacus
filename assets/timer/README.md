@@ -2,21 +2,16 @@
 
 `flame-full-animated.webp`, `flame-half-animated.webp`, and
 `flame-ember-animated.webp` are transparent 724 x 724 looping animations.
-Every file contains 64 genuinely rendered fire frames at 42 ms per frame.
-The flames change across their full height and at the fuel bed; no geometric
-warping or side-to-side image motion is used.
+Each contains 64 frames at 42 ms per frame. Four blended in-between frames are
+created from each pair of the 16 original animation frames, including the loop
+boundary, to smooth their motion without deforming the artwork.
 
-All three stages share the same fire pit artwork, so the wood and stones never
-change shape as the timer runs down. Light from the rendered flame modulates the
-glow across the logs and coal bed, while the source simulation supplies natural
-licks, splits, collapses, and small flying embers.
+The **Campfire** animation comes from [AutoSprite's free sprite library](https://www.autosprite.io/free-sprites/campfire)
+under CC0. Its flame, sparks, logs, and stones are one cohesive source asset.
+The original logs and stones stay at the same size and position in every stage;
+only the upper flame is reduced. No older generated fire or separate wood artwork
+remains.
 
-The fire simulation is **Large Campfire Loop - No Smoke - Flipbooks (8x8)** by
-Ammar Khan / CGHEVEN, licensed CC0:
-
-https://cgheven.com/assets/large-campfire-loop-no-smoke-flipbooks-6x6-8x8
-
-The original 4K 8x8 sheet and the shared campfire base live in `source/` for
-rebuilding but are excluded from packaged releases. Run
-`python tools/build-flame-animation.py` after changing either source. The script
-also regenerates `flame-animation-contact-sheet.jpg` for visual review.
+The original animated WebP is in `source/` for rebuilding and excluded from
+packaged releases. Run `python tools/build-flame-animation.py` to regenerate
+the optimized animations and `flame-animation-contact-sheet.jpg`.

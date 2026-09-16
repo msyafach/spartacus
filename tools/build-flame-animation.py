@@ -3,126 +3,108 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
+from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "assets" / "timer"
-SOURCE = ASSETS / "source" / "cgheven-large-campfire-64-4k.png"
-LOGS_SOURCE = ASSETS / "source" / "campfire-base.png"
+SOURCE = ASSETS / "source" / "autosprite-campfire-preview.webp"
 CANVAS_SIZE = 724
-FRAME_COUNT = 64
 FRAME_MS = 42
-FIRE_SOURCE_CENTER_X = 230.1
+INTERPOLATED_STEPS = 4
 
+# Keep the complete campfire and its logs at one fixed size. Only the flame
+# region above the fuel bed changes size as the timer counts down.
 STAGES = {
-    "full": {"fire_size": 590, "fire_bottom": 585, "glow": 105},
-    "half": {"fire_size": 410, "fire_bottom": 570, "glow": 72},
-    "ember": {"fire_size": 245, "fire_bottom": 560, "glow": 48},
+    "full": {"flame_width": 1.0, "flame_height": 1.0},
+    "half": {"flame_width": 0.82, "flame_height": 0.62},
+    "ember": {"flame_width": 0.58, "flame_height": 0.30},
 }
+CAMPFIRE_SIZE = 650
+CAMPFIRE_BOTTOM = 672
+FLAME_ANCHOR_X = 144
+FLAME_ANCHOR_Y = 183
 
 
-def split_flipbook(sheet: Image.Image) -> list[Image.Image]:
-    if sheet.size[0] % 8 or sheet.size[1] % 8:
-        raise ValueError(f"Expected an 8x8 flipbook, got {sheet.size}")
-    cell_w = sheet.size[0] // 8
-    cell_h = sheet.size[1] // 8
-    return [
-        sheet.crop((column * cell_w, row * cell_h, (column + 1) * cell_w, (row + 1) * cell_h))
-        for row in range(8)
-        for column in range(8)
-    ]
+def load_frames(source: Path) -> list[Image.Image]:
+    animation = Image.open(source)
+    frames: list[Image.Image] = []
+    for index in range(getattr(animation, "n_frames", 1)):
+        animation.seek(index)
+        frames.append(animation.convert("RGBA").copy())
+    if len(frames) < 2:
+        raise ValueError(f"Expected an animated campfire, got {len(frames)} frame")
+    return frames
 
 
-def extract_log_layer(source: Image.Image) -> Image.Image:
-    """Keep one consistent fire pit while removing the old painted upper flame."""
-    source = source.convert("RGBA")
-    rgba = np.asarray(source, dtype=np.float32).copy()
-    height = rgba.shape[0]
-    rgb = rgba[:, :, :3]
-    alpha = rgba[:, :, 3]
-    luminance = rgb[:, :, 0] * 0.299 + rgb[:, :, 1] * 0.587 + rgb[:, :, 2] * 0.114
-    y = np.arange(height, dtype=np.float32)[:, None]
-
-    # Above the pit, retain only dark solid material. From the coal bed down,
-    # retain the original pixels completely. A soft transition avoids a cutout edge.
-    vertical = np.clip((y - 335.0) / 85.0, 0.0, 1.0)
-    dark_material = np.clip((218.0 - luminance) / 92.0, 0.0, 1.0)
-    transition = np.where(y < 535.0, vertical * dark_material, 1.0)
-    rgba[:, :, 3] = alpha * transition
-    layer = Image.fromarray(np.clip(rgba, 0, 255).astype(np.uint8), "RGBA")
-    bbox = layer.getchannel("A").getbbox()
-    if not bbox:
-        return layer
-    content_center = (bbox[0] + bbox[2]) / 2
-    offset_x = round(CANVAS_SIZE / 2 - content_center)
-    centered = Image.new("RGBA", layer.size, (0, 0, 0, 0))
-    centered.alpha_composite(layer, (offset_x, 0))
-    return centered
+def interpolate_rgba(first: Image.Image, second: Image.Image, amount: float) -> Image.Image:
+    """Blend in premultiplied-alpha space to keep transparent edges clean."""
+    a = np.asarray(first, dtype=np.float32) / 255.0
+    b = np.asarray(second, dtype=np.float32) / 255.0
+    a_alpha = a[:, :, 3:4]
+    b_alpha = b[:, :, 3:4]
+    alpha = a_alpha * (1.0 - amount) + b_alpha * amount
+    premultiplied = a[:, :, :3] * a_alpha * (1.0 - amount) + b[:, :, :3] * b_alpha * amount
+    rgb = np.divide(premultiplied, alpha, out=np.zeros_like(premultiplied), where=alpha > 1e-6)
+    rgba = np.concatenate((rgb, alpha), axis=2)
+    return Image.fromarray(np.clip(rgba * 255.0, 0, 255).astype(np.uint8), "RGBA")
 
 
-def make_glow(stage: str, energy: float) -> Image.Image:
+def make_smooth_loop(source_frames: list[Image.Image]) -> list[Image.Image]:
+    frames: list[Image.Image] = []
+    for index, current in enumerate(source_frames):
+        following = source_frames[(index + 1) % len(source_frames)]
+        for step in range(INTERPOLATED_STEPS):
+            frames.append(interpolate_rgba(current, following, step / INTERPOLATED_STEPS))
+    return frames
+
+
+def split_flame(source: Image.Image) -> tuple[Image.Image, Image.Image]:
+    """Separate the bright moving flame from the original logs and stones."""
+    pixels = np.asarray(source, dtype=np.uint8).copy()
+    height, width = pixels.shape[:2]
+    y = np.arange(height)[:, None]
+    x = np.arange(width)[None, :]
+    red = pixels[:, :, 0].astype(np.float32)
+    green = pixels[:, :, 1].astype(np.float32)
+    blue = pixels[:, :, 2].astype(np.float32)
+    warm_flame = (red > 105) & (red > green * 1.14) & (green > blue * 1.25)
+    flame_mask = ((y < 140) | ((y < 178) & (x > 64) & (x < 224) & warm_flame)) & (pixels[:, :, 3] > 0)
+
+    base_pixels = pixels.copy()
+    base_pixels[:, :, 3][flame_mask] = 0
+    flame_pixels = pixels.copy()
+    flame_pixels[:, :, 3][~flame_mask] = 0
+    return Image.fromarray(base_pixels, "RGBA"), Image.fromarray(flame_pixels, "RGBA")
+
+
+def render_stage(stage: str, source_frames: list[Image.Image]) -> list[Image.Image]:
     config = STAGES[stage]
-    layer = Image.new("RGBA", (CANVAS_SIZE, CANVAS_SIZE), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(layer)
-    # The broad halo stays stable so the loop does not flash against the UI.
-    # Flicker is confined to the fuel bed in warm_logs().
-    alpha = round(config["glow"] * 0.86)
-    if stage == "full":
-        box = (105, 325, 619, 685)
-    elif stage == "half":
-        box = (155, 390, 569, 680)
-    else:
-        box = (220, 455, 504, 665)
-    draw.ellipse(box, fill=(255, 71, 8, alpha))
-    return layer.filter(ImageFilter.GaussianBlur(54 if stage == "full" else 42))
-
-
-def warm_logs(logs: Image.Image, energy: float, stage: str) -> Image.Image:
-    config = STAGES[stage]
-    strength = config["glow"] / STAGES["full"]["glow"]
-    warm = Image.new("RGBA", logs.size, (255, 75, 5, 0))
-    mask = Image.new("L", logs.size, 0)
-    draw = ImageDraw.Draw(mask)
-    alpha = round((31 + energy * 20) * strength)
-    draw.ellipse((170, 410, 555, 650), fill=alpha)
-    mask = mask.filter(ImageFilter.GaussianBlur(38))
-    mask_arr = np.asarray(mask, dtype=np.uint8)
-    log_alpha = np.asarray(logs.getchannel("A"), dtype=np.uint8)
-    warm.putalpha(Image.fromarray(np.minimum(mask_arr, log_alpha), "L"))
-    return Image.alpha_composite(logs, warm)
-
-
-def render_stage(stage: str, fire_frames: list[Image.Image], logs: Image.Image) -> list[Image.Image]:
-    config = STAGES[stage]
-    size = int(config["fire_size"])
-    bottom = int(config["fire_bottom"])
     rendered: list[Image.Image] = []
 
-    raw_energies: list[float] = []
-    for fire in fire_frames:
-        rgba = np.asarray(fire.convert("RGBA"), dtype=np.float32)
-        alpha = rgba[:, :, 3] / 255.0
-        luminance = rgba[:, :, 0] * 0.299 + rgba[:, :, 1] * 0.587 + rgba[:, :, 2] * 0.114
-        raw_energies.append(float((luminance * alpha).sum() / max(alpha.sum(), 1.0)))
-    energy_min = min(raw_energies)
-    energy_span = max(max(raw_energies) - energy_min, 1.0)
+    for source in source_frames:
+        if stage == "full":
+            campfire = source
+        else:
+            base, flame = split_flame(source)
+            width_scale = config["flame_width"]
+            height_scale = config["flame_height"]
+            flame = flame.resize(
+                (round(source.width * width_scale), round(source.height * height_scale)),
+                Image.Resampling.LANCZOS,
+            )
+            campfire = base.copy()
+            campfire.alpha_composite(
+                flame,
+                (
+                    round(FLAME_ANCHOR_X * (1.0 - width_scale)),
+                    round(FLAME_ANCHOR_Y * (1.0 - height_scale)),
+                ),
+            )
 
-    for fire, raw_energy in zip(fire_frames, raw_energies):
-        fire = fire.convert("RGBA")
-        energy = (raw_energy - energy_min) / energy_span
-        fire = fire.resize((size, size), Image.Resampling.LANCZOS)
-        fire = ImageEnhance.Color(fire).enhance(1.04)
-
+        campfire = campfire.resize((CAMPFIRE_SIZE, CAMPFIRE_SIZE), Image.Resampling.LANCZOS)
         canvas = Image.new("RGBA", (CANVAS_SIZE, CANVAS_SIZE), (0, 0, 0, 0))
-        canvas = Image.alpha_composite(canvas, make_glow(stage, energy))
-        # The simulation was rendered off-axis inside every source cell.
-        # Apply one stable correction to all frames so the flame remains natural
-        # while its average visual center sits over the coal bed.
-        source_offset = round((256.0 - FIRE_SOURCE_CENTER_X) * size / 512.0)
-        left = (CANVAS_SIZE - size) // 2 + source_offset
-        canvas.alpha_composite(fire, (left, bottom - size))
-        canvas = Image.alpha_composite(canvas, warm_logs(logs, energy, stage))
+        canvas.alpha_composite(campfire, ((CANVAS_SIZE - CAMPFIRE_SIZE) // 2, CAMPFIRE_BOTTOM - CAMPFIRE_SIZE))
         rendered.append(canvas)
 
     return rendered
@@ -136,7 +118,7 @@ def save_animation(frames: list[Image.Image], destination: Path) -> None:
         duration=FRAME_MS,
         loop=0,
         lossless=False,
-        quality=88,
+        quality=91,
         method=3,
         minimize_size=True,
     )
@@ -150,21 +132,24 @@ def save_contact_sheet(stages: dict[str, list[Image.Image]]) -> None:
         for column, index in enumerate(indices):
             frame = frames[index].copy()
             frame.thumbnail((thumb, thumb), Image.Resampling.LANCZOS)
-            sheet.alpha_composite(frame, (column * thumb + (thumb - frame.width) // 2, row * thumb))
-    sheet.convert("RGB").save(ASSETS / "flame-animation-contact-sheet.jpg", quality=91)
+            left = column * thumb + (thumb - frame.width) // 2
+            top = row * thumb + (thumb - frame.height) // 2
+            sheet.alpha_composite(frame, (left, top))
+    sheet.convert("RGB").save(ASSETS / "flame-animation-contact-sheet.jpg", quality=92)
 
 
 def main() -> None:
     if not SOURCE.exists():
-        raise FileNotFoundError(f"Missing licensed source flipbook: {SOURCE}")
-    if not LOGS_SOURCE.exists():
-        raise FileNotFoundError(f"Missing campfire base artwork: {LOGS_SOURCE}")
+        raise FileNotFoundError(f"Missing CC0 campfire animation: {SOURCE}")
 
-    fire_frames = split_flipbook(Image.open(SOURCE))
-    logs = extract_log_layer(Image.open(LOGS_SOURCE))
+    source_frames = load_frames(SOURCE)
+    smooth_frames = make_smooth_loop(source_frames)
+    if len(smooth_frames) != 64:
+        raise ValueError(f"Expected 64 output frames, got {len(smooth_frames)}")
+
     built: dict[str, list[Image.Image]] = {}
     for stage in STAGES:
-        frames = render_stage(stage, fire_frames, logs)
+        frames = render_stage(stage, smooth_frames)
         save_animation(frames, ASSETS / f"flame-{stage}-animated.webp")
         built[stage] = frames
     save_contact_sheet(built)
